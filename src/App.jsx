@@ -702,36 +702,41 @@ export default function FatherCare(){
 
         {/* HISTORY */}
         {tab==="history"&&<div className="slide-up">
+
+          {/* Today's log */}
+          <div style={{fontSize:12,fontWeight:700,color:S.muted,marginBottom:10,letterSpacing:0.5}}>سجل اليوم</div>
+          {Object.keys(logs).length===0&&<div style={{textAlign:"center",padding:"24px 20px",color:S.muted,display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginBottom:16}}><div style={{fontSize:36}}>📭</div><p>لا يوجد سجل لهذا اليوم بعد</p></div>}
+          {schedule.filter(i=>logs[i.id]).map(item=>{
+            const log=logs[item.id];
+            return(
+              <div key={item.id} style={{background:S.card,borderRadius:14,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,border:`1px solid ${S.border}`}}>
+                <span style={{fontSize:22,width:36,textAlign:"center"}}>{item.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:700,color:S.text}}>{item.name}</div>
+                  <div style={{fontSize:11,color:S.muted,marginTop:2}}>قام بها: <span style={{color:"#38bdf8"}}>{log.doneBy}</span></div>
+                </div>
+                <div style={{fontSize:12,color:"#38bdf8",fontWeight:700}}>{log.doneAt}</div>
+              </div>
+            );
+          })}
+
+          {/* Divider */}
+          <div style={{height:1,background:S.border,margin:"16px 0"}}/>
+
           {/* Search by date */}
-          <div style={{background:S.card,borderRadius:14,padding:"14px 16px",marginBottom:16,border:`1px solid ${S.border}`}}>
-            <div style={{fontSize:12,fontWeight:700,color:S.muted,marginBottom:8}}>🔍 بحث بتاريخ محدد</div>
-            <div style={{display:"flex",gap:8}}>
-              <input type="date" value={historyDate} onChange={e=>setHistoryDate(e.target.value)} max={today}
-                style={{flex:1,background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"8px 12px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}}/>
-              <button className="btn" onClick={()=>loadHistoryDate(historyDate)} disabled={!historyDate}
-                style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}}>عرض</button>
-            </div>
+          <div style={{fontSize:12,fontWeight:700,color:S.muted,marginBottom:10,letterSpacing:0.5}}>🔍 سجل يوم سابق</div>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            <input type="date" value={historyDate} onChange={e=>setHistoryDate(e.target.value)} max={today}
+              style={{flex:1,background:S.card,border:`1px solid ${S.border}`,borderRadius:10,padding:"8px 12px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}}/>
+            <button className="btn" onClick={()=>loadHistoryDate(historyDate)} disabled={!historyDate}
+              style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}}>عرض</button>
           </div>
 
           {/* Weekly PDF */}
-          {activeUser===ADMIN&&(
-            <button className="btn" onClick={downloadWeeklyPDF} disabled={pdfLoading}
-              style={{width:"100%",background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <button className="btn" onClick={downloadWeeklyPDF} disabled={pdfLoading}
+              style={{width:"100%",background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
               {pdfLoading?"⏳ جاري الإنشاء...":"📄 تحميل التقرير الأسبوعي PDF"}
             </button>
-          )}
-
-          <div style={{fontSize:12,fontWeight:700,color:S.muted,marginBottom:12,letterSpacing:0.5}}>آخر ٧ أيام</div>
-          {pastDays.map(date=>{
-            const d=new Date(date);
-            return(
-              <button key={date} className="btn" onClick={()=>loadHistoryDate(date)}
-                style={{width:"100%",background:S.card,border:`1px solid ${S.border}`,borderRadius:14,padding:"12px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",color:S.text,fontFamily:"Tajawal"}}>
-                <span style={{fontSize:14,fontWeight:600}}>{d.toLocaleDateString("ar-SA",{weekday:"long",month:"short",day:"numeric"})}</span>
-                <span style={{fontSize:13,color:"#38bdf8"}}>عرض ←</span>
-              </button>
-            );
-          })}
         </div>}
 
         {/* NOTES */}
