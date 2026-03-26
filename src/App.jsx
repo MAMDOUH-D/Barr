@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -15,6 +16,10 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
+let messaging = null;
+try { messaging = getMessaging(firebaseApp); } catch(e) {}
+
+const FCM_VAPID_KEY = "BLBz-placeholder-will-work-without-vapid";
 
 const fbGet = async (key) => {
   try { const s = await getDoc(doc(db,"barr",key)); return s.exists()?s.data().value:null; }
@@ -68,27 +73,43 @@ const DEFAULT_SCHEDULE = [
 ];
 
 // ── OneSignal ─────────────────────────────────────────────────────────────
-const requestNotifPermission = async () => {
+const FCM_SERVER = "https://barr-gamma.vercel.app/api/notify";
+
+const registerFCM = async (userName) => {
   try {
-    if(window.OneSignalDeferred) {
-      window.OneSignalDeferred.push(async(OS) => {
-        const permission = await OS.Notifications.requestPermission();
-        return permission;
-      });
-    } else if("Notification" in window) {
-      await Notification.requestPermission();
-    }
-  } catch(e){ console.log("Notif permission error:", e); }
-};
-const sendNotifToAll = async (title,message) => {
-  try {
-    await fetch("https://onesignal.com/api/v1/notifications",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Key ${ONESIGNAL_API_KEY}`},
-      body:JSON.stringify({app_id:ONESIGNAL_APP_ID,included_segments:["All"],headings:{ar:title},contents:{ar:message},url:window.location.origin})
+    if(!("Notification" in window)) return;
+    const permission = await Notification.requestPermission();
+    if(permission !== "granted") return;
+    if(!messaging) return;
+
+    const token = await getToken(messaging, {
+      serviceWorkerRegistration: await navigator.serviceWorker.register("/firebase-messaging-sw.js")
     });
-  } catch(e){}
+
+    if(token && userName) {
+      // Save token to Firebase under user name
+      const tokensData = await fbGet("fcm_tokens");
+      const tokens = tokensData ? JSON.parse(tokensData) : {};
+      tokens[userName] = token;
+      await fbSet("fcm_tokens", JSON.stringify(tokens));
+    }
+  } catch(e){ console.log("FCM error:", e); }
 };
+
+const requestNotifPermission = async (userName) => {
+  await registerFCM(userName);
+};
+
+const sendNotifToAll = async (title, body) => {
+  try {
+    await fetch(FCM_SERVER, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, body })
+    });
+  } catch(e) {}
+};
+// OneSignal replaced by FCM
 
 // ── PDF Report Generator ──────────────────────────────────────────────────
 const toEn = (str) => {
@@ -431,6 +452,16 @@ export default function FatherCare(){
 
   useEffect(()=>{loadData();},[]);
 
+  // FCM foreground messages
+  useEffect(()=>{
+    if(!messaging) return;
+    const unsub = onMessage(messaging, (payload) => {
+      const {title,body} = payload.notification || {};
+      showNotif(`${title}: ${body}`);
+    });
+    return ()=>unsub();
+  },[]);
+
   const loadData=async()=>{
     try{
       const [sched,logs_,notes_,pins_,vitals_]=await Promise.all([
@@ -553,7 +584,7 @@ export default function FatherCare(){
 
   const handleSelectUser=(name)=>{
     if(!pins[name]){
-      if(name===ADMIN){setActiveUser(name);setScreen("app");localStorage.setItem("barr_session",JSON.stringify({user:name}));requestNotifPermission();}
+      if(name===ADMIN){setActiveUser(name);setScreen("app");localStorage.setItem("barr_session",JSON.stringify({user:name}));requestNotifPermission(name);}
       else showNotif("⚠️ لم يُعيَّن رقم سري لهذا الشخص بعد");
       return;
     }
@@ -563,7 +594,7 @@ export default function FatherCare(){
   const handlePinSuccess=(name)=>{
     setActiveUser(name);setScreen("app");
     localStorage.setItem("barr_session",JSON.stringify({user:name}));
-    requestNotifPermission();
+    requestNotifPermission(name);
   };
 
   const logout=()=>{setScreen("select");setActiveUser(null);setTab("today");localStorage.removeItem("barr_session");};
