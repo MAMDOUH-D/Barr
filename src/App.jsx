@@ -82,6 +82,13 @@ const sendNotifToAll = async (title,message) => {
 };
 
 // ── PDF Report Generator ──────────────────────────────────────────────────
+const toEn = (str) => {
+  // Strip non-ASCII for PDF safety, keep English chars and numbers
+  return (str||"").replace(/[^ -]/g, "").trim() || "-";
+};
+
+const mealEn = (meal) => meal==="الفطور"?"Breakfast":meal==="الغداء"?"Lunch":meal==="العشاء"?"Dinner":meal||"";
+
 const generateWeeklyPDF = async (schedule, weekDays) => {
   const pdf = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
 
@@ -118,48 +125,45 @@ const generateWeeklyPDF = async (schedule, weekDays) => {
     pdf.text(dateStr, 15, y+5.5);
     y += 12;
 
-    // Medications table
     const doneItems = schedule.filter(i => logs[i.id]);
-    const missedItems = schedule.filter(i => !logs[i.id]);
+    const rows = schedule.map(item => {
+      const log = logs[item.id];
+      const dose = toEn(item.dose || item.desc || "");
+      const status = log ? `Done: ${toEn(log.doneBy)} ${log.doneAt||""}` : "Not done";
+      return [item.name, dose, mealEn(item.meal), status];
+    });
 
-    if(doneItems.length > 0 || missedItems.length > 0){
-      const rows = schedule.map(item => [
-        item.name,
-        item.dose || item.desc || "",
-        item.meal || "",
-        logs[item.id] ? `✓ ${logs[item.id].doneBy} ${logs[item.id].doneAt}` : "✗ Not done"
-      ]);
-
-      autoTable(pdf, {
-        startY: y,
-        head: [["Medication/Meal","Dose","Period","Status"]],
-        body: rows,
-        theme: "grid",
-        headStyles: { fillColor:[30,58,95], textColor:255, fontSize:9 },
-        bodyStyles: { fontSize:8, textColor:[30,30,30] },
-        columnStyles: { 3: { cellWidth: 50 } },
-        didParseCell: (data) => {
-          if(data.section==="body" && data.column.index===3){
-            if(data.cell.raw.includes("✓")) data.cell.styles.textColor = [21,128,61];
-            else data.cell.styles.textColor = [220,38,38];
-          }
-        },
-        margin:{left:10,right:10},
-      });
-      y = pdf.lastAutoTable.finalY + 4;
-    }
+    autoTable(pdf, {
+      startY: y,
+      head: [["Medication / Meal", "Dose / Notes", "Period", "Status"]],
+      body: rows,
+      theme: "grid",
+      headStyles: { fillColor:[30,58,95], textColor:255, fontSize:9 },
+      bodyStyles: { fontSize:8, textColor:[30,30,30] },
+      columnStyles: { 3: { cellWidth: 48 } },
+      didParseCell: (data) => {
+        if(data.section==="body" && data.column.index===3){
+          if(data.cell.raw.startsWith("Done")) data.cell.styles.textColor = [21,128,61];
+          else data.cell.styles.textColor = [220,38,38];
+        }
+      },
+      margin:{left:10,right:10},
+    });
+    y = pdf.lastAutoTable.finalY + 4;
 
     // Vitals
     const vitalEntries = Object.values(vitals);
     if(vitalEntries.length > 0){
       vitalEntries.forEach(v => {
+        if(y > 270){ pdf.addPage(); y = 20; }
         pdf.setFontSize(8);
         pdf.setTextColor(100,100,100);
         pdf.setFont(undefined,"normal");
-        let vStr = `📊 ${v.period}: `;
+        const period = v.period==="صباح"?"Morning":"Evening";
+        let vStr = `Vitals (${period}): `;
         if(v.bp_sys && v.bp_dia) vStr += `BP: ${v.bp_sys}/${v.bp_dia} mmHg  `;
         if(v.sugar) vStr += `Sugar: ${v.sugar} mg/dL  `;
-        vStr += `(by ${v.by})`;
+        vStr += `| By: ${toEn(v.by)}`;
         pdf.text(vStr, 12, y);
         y += 5;
       });
@@ -171,12 +175,13 @@ const generateWeeklyPDF = async (schedule, weekDays) => {
         if(y > 270){ pdf.addPage(); y = 20; }
         pdf.setFontSize(8);
         pdf.setTextColor(80,80,80);
-        pdf.text(`📝 ${n.by} (${n.at}): ${n.text.substring(0,80)}`, 12, y);
+        const noteText = toEn(n.text).substring(0,90) || "(Arabic note)";
+        pdf.text(`Note by ${toEn(n.by)} (${n.at||""}): ${noteText}`, 12, y);
         y += 5;
       });
     }
 
-    // Compliance rate
+    // Compliance
     const total = schedule.length;
     const done = doneItems.length;
     const pct = total > 0 ? Math.round((done/total)*100) : 0;
@@ -184,7 +189,7 @@ const generateWeeklyPDF = async (schedule, weekDays) => {
     pdf.setTextColor(30,58,95);
     pdf.setFont(undefined,"bold");
     pdf.text(`Compliance: ${done}/${total} (${pct}%)`, 150, y);
-    y += 8;
+    y += 10;
 
     if(y > 260){ pdf.addPage(); y = 20; }
   }
