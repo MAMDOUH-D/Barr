@@ -69,7 +69,16 @@ const DEFAULT_SCHEDULE = [
 
 // ── OneSignal ─────────────────────────────────────────────────────────────
 const requestNotifPermission = async () => {
-  try { if(window.OneSignalDeferred) window.OneSignalDeferred.push(async(OS)=>await OS.Notifications.requestPermission()); } catch(e){}
+  try {
+    if(window.OneSignalDeferred) {
+      window.OneSignalDeferred.push(async(OS) => {
+        const permission = await OS.Notifications.requestPermission();
+        return permission;
+      });
+    } else if("Notification" in window) {
+      await Notification.requestPermission();
+    }
+  } catch(e){ console.log("Notif permission error:", e); }
 };
 const sendNotifToAll = async (title,message) => {
   try {
@@ -584,6 +593,7 @@ export default function FatherCare(){
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <button className="btn" onClick={()=>{setLoading(true);loadData();}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>🔄</button>
+            <button className="btn" onClick={async()=>{ await requestNotifPermission(); showNotif("🔔 تم طلب إذن الإشعارات");}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}} title="تفعيل الإشعارات">🔔</button>
             <button className="btn" onClick={()=>setNight(n=>!n)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{night?"☀️":"🌙"}</button>
             <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="50" height="50" viewBox="0 0 56 56">
