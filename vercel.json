@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "dist",
+  "framework": null,
+  "installCommand": "npm install --legacy-peer-deps",
+  "crons": [
+    {
+      "path": "/api/notify",
+      "schedule": "* * * * *"
+    }
+  ]
+}
