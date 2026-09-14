@@ -7,6 +7,8 @@ export const CONTINUITY_REQUIREMENTS = [
   { key: "resourceAvailable", label: "توفر دواء دعث", repairLabel: "توفير الدواء" },
 ];
 
+export const normalizeFamilyName = (name) => name === "صاهود" ? "مفلح" : name;
+
 export const DEMO_CONTINUITY_TASK = {
   id: "continuity_demo_9pm",
   name: "دواء دعث الساعة 9",
@@ -43,7 +45,7 @@ export const DEMO_CONTINUITY_TASKS = [
     meal: "الفطور",
     demoOnly: true,
     continuity: {
-      primary: "صاهود",
+      primary: "مفلح",
       backup: "عبدالله",
       importance: "critical",
       requirements: {
@@ -88,8 +90,8 @@ export function normalizeContinuity(continuity = {}) {
   }
 
   return {
-    primary: continuity.primary || "غير محدد",
-    backup: continuity.backup || "غير محدد",
+    primary: normalizeFamilyName(continuity.primary) || "غير محدد",
+    backup: normalizeFamilyName(continuity.backup) || "غير محدد",
     importance: continuity.importance || "normal",
     requirements,
   };

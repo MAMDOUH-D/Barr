@@ -9,6 +9,7 @@ import {
   DEMO_CONTINUITY_TASK,
   ensureDemoTask,
   evaluateContinuity,
+  normalizeFamilyName,
   normalizeContinuity,
   repairContinuityRequirement,
 } from "./continuityEngine.js";
@@ -38,9 +39,9 @@ const fbSet = async (key,value) => {
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────
-const FAMILY_MEMBERS = ["صاهود","مضحي","ممدوح","محمد","عبدالله","ماجد","مدعث"];
+const FAMILY_MEMBERS = ["مفلح","مضحي","ممدوح","محمد","عبدالله","ماجد","مدعث"];
 const FAMILY_RELATIONSHIPS = {
-  صاهود:"الابن الأكبر",
+  مفلح:"الابن الأكبر",
   مضحي:"ابن",
   ممدوح:"ابن",
   محمد:"ابن",
@@ -62,6 +63,15 @@ const formatTime12 = (t) => {
 };
 const continuityStatusLabel = (status) => status==="PASS"?"مكتملة":"غير مكتملة";
 const formatArabicNumber = (value) => Number(value).toLocaleString("ar-SA");
+const migratePins = (savedPins = {}) => {
+  const migrated = {...savedPins};
+  if(migrated["صاهود"]&&!migrated["مفلح"])migrated["مفلح"]=migrated["صاهود"];
+  delete migrated["صاهود"];
+  return migrated;
+};
+const migrateLogs = (savedLogs = {}) => Object.fromEntries(Object.entries(savedLogs).map(([id,log])=>[id,{...log,doneBy:normalizeFamilyName(log.doneBy)}]));
+const migrateNotes = (savedNotes = []) => savedNotes.map(note=>({...note,by:normalizeFamilyName(note.by)}));
+const migrateVitals = (savedVitals = {}) => Object.fromEntries(Object.entries(savedVitals).map(([id,vital])=>[id,{...vital,by:normalizeFamilyName(vital.by)}]));
 
 // ── Default Schedule ──────────────────────────────────────────────────────
 const DEFAULT_SCHEDULE = [
@@ -283,6 +293,16 @@ const getTheme=(night)=>night?{
   tabBg:"rgba(255,253,250,.97)",tabBorder:"#e6e0d7",doneBg:"#f1faf5",doneBorder:"#c7ead4",
 };
 
+function NavIcon({name,active}){
+  if(name==="continuity")return <img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:34,height:27,objectFit:"contain",opacity:active?1:.62,filter:active?"none":"grayscale(.25)"}}/>;
+  const shared={width:25,height:25,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:active?2.35:2,strokeLinecap:"round",strokeLinejoin:"round","aria-hidden":true};
+  if(name==="today")return <svg {...shared}><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9 21v-6h6v6"/></svg>;
+  if(name==="vitals")return <svg {...shared}><path d="M3 12h4l2-5 4 10 2-5h6"/><path d="M5 4.8A9 9 0 1 1 3.8 17" opacity=".45"/></svg>;
+  if(name==="history")return <svg {...shared}><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h4"/></svg>;
+  if(name==="notes")return <svg {...shared}><path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 16l5.5-5.5 2 2L10 18l-3 1z"/></svg>;
+  return <svg {...shared}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2"/></svg>;
+}
+
 // ── PIN Screen ────────────────────────────────────────────────────────────
 function PinScreen({name,onSuccess,onBack,pins,night}){
   const [pin,setPin]=useState("");
@@ -334,8 +354,7 @@ function SelectUser({onSelect,night}){
   return(
     <div style={{minHeight:"100vh",background:S.bg,fontFamily:"'Tajawal',sans-serif"}} className="slide-up" dir="rtl">
       <div style={{background:S.header,padding:"40px 20px 30px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-        <img src="/barr-logo.png" alt="شعار بار" style={{width:180,height:120,objectFit:"contain"}}/>
-        <div style={{fontSize:13,color:night?"rgba(255,255,255,0.7)":S.subtext}}>رعاية أعمق لحياة أطمئن</div>
+        <img src="/barr-logo-mark.png" alt="شعار بار" style={{width:180,height:120,objectFit:"contain"}}/>
         <div style={{fontSize:12,color:night?"rgba(255,255,255,0.7)":S.muted,marginTop:6}}>اختر اسمك للدخول</div>
       </div>
       <div style={{padding:16}}>
@@ -458,7 +477,7 @@ function CareContinuity({tasks,onUpdate,night}){
       <div style={{background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:18,marginBottom:14,color:night?"#fff":S.text}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
           <div>
-            <div style={{fontSize:12,color:night?"#93c5fd":"#3978b9",fontWeight:700,marginBottom:5}}>♡ استمرارية الرعاية</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:night?"#93c5fd":"#3978b9",fontWeight:700,marginBottom:5}}><img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:27,height:20,objectFit:"contain"}}/> استمرارية الرعاية</div>
             <div style={{fontSize:21,fontWeight:900}}>{failing.length?"تحتاج انتباهًا":"الرعاية جاهزة للاستمرار"}</div>
             <div style={{fontSize:12,color:night?"#bfdbfe":S.subtext,marginTop:6,lineHeight:1.7}}>{tasksSummary} • {risksSummary}</div>
           </div>
@@ -580,7 +599,7 @@ export default function FatherCare(){
     const saved=localStorage.getItem("barr_session");
     if(saved){
       try{
-        const {user}=JSON.parse(saved);
+        const user=normalizeFamilyName(JSON.parse(saved).user);
         if(FAMILY_MEMBERS.includes(user)){setActiveUser(user);setScreen("app");}
       }catch(e){}
     }
@@ -605,10 +624,10 @@ export default function FatherCare(){
       ]);
       if(sched)setSchedule(ensureDemoTask(JSON.parse(sched)));
       else setSchedule(current=>ensureDemoTask(current));
-      if(logs_)setLogs(JSON.parse(logs_));
-      if(notes_)setNotes(JSON.parse(notes_));
-      if(pins_)setPins(JSON.parse(pins_));
-      if(vitals_)setVitals(JSON.parse(vitals_));
+      if(logs_)setLogs(migrateLogs(JSON.parse(logs_)));
+      if(notes_)setNotes(migrateNotes(JSON.parse(notes_)));
+      if(pins_)setPins(migratePins(JSON.parse(pins_)));
+      if(vitals_)setVitals(migrateVitals(JSON.parse(vitals_)));
     }catch(e){}
     setLoading(false);
   };
@@ -616,9 +635,9 @@ export default function FatherCare(){
   useEffect(()=>{
     if(loading)return;
     const ignoreUnavailable=()=>{};
-    const u1=onSnapshot(doc(db,"barr",`logs_${today}`),(s)=>{if(s.exists())setLogs(JSON.parse(s.data().value));},ignoreUnavailable);
-    const u2=onSnapshot(doc(db,"barr",`notes_${today}`),(s)=>{if(s.exists())setNotes(JSON.parse(s.data().value));},ignoreUnavailable);
-    const u3=onSnapshot(doc(db,"barr",`vitals_${today}`),(s)=>{if(s.exists())setVitals(JSON.parse(s.data().value));},ignoreUnavailable);
+    const u1=onSnapshot(doc(db,"barr",`logs_${today}`),(s)=>{if(s.exists())setLogs(migrateLogs(JSON.parse(s.data().value)));},ignoreUnavailable);
+    const u2=onSnapshot(doc(db,"barr",`notes_${today}`),(s)=>{if(s.exists())setNotes(migrateNotes(JSON.parse(s.data().value)));},ignoreUnavailable);
+    const u3=onSnapshot(doc(db,"barr",`vitals_${today}`),(s)=>{if(s.exists())setVitals(migrateVitals(JSON.parse(s.data().value)));},ignoreUnavailable);
     return()=>{u1();u2();u3();};
   },[loading]);
 
@@ -715,9 +734,9 @@ export default function FatherCare(){
     setHistoryLogs(null);setHistoryNotes(null);setHistoryVitals(null);
     setShowHistoryModal(true);
     const [l,n,v]=await Promise.all([fbGet(`logs_${date}`),fbGet(`notes_${date}`),fbGet(`vitals_${date}`)]);
-    setHistoryLogs(l?JSON.parse(l):{});
-    setHistoryNotes(n?JSON.parse(n):[]);
-    setHistoryVitals(v?JSON.parse(v):{});
+    setHistoryLogs(l?migrateLogs(JSON.parse(l)):{});
+    setHistoryNotes(n?migrateNotes(JSON.parse(n)):[]);
+    setHistoryVitals(v?migrateVitals(JSON.parse(v)):{});
   };
 
   // Generate & download weekly PDF
@@ -777,10 +796,7 @@ export default function FatherCare(){
       <div style={{background:S.header,padding:"18px 20px 20px",borderBottom:`1px solid ${S.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <img src="/barr-logo.png" alt="شعار بار" style={{width:96,height:60,objectFit:"contain",flexShrink:0}}/>
-            <div>
-              <div style={{fontSize:10,color:night?"rgba(255,255,255,.68)":S.subtext,lineHeight:1.6}}>رعاية أعمق<br/>لحياة أطمئن</div>
-            </div>
+            <img src="/barr-logo-mark.png" alt="شعار بار" style={{width:76,height:48,objectFit:"contain",flexShrink:0}}/>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <button className="btn" onClick={()=>{setLoading(true);loadData();}} style={{background:night?"rgba(255,255,255,.12)":S.card,border:`1px solid ${S.border}`,borderRadius:12,width:36,height:36,fontSize:15,cursor:"pointer",color:S.text,display:"flex",alignItems:"center",justifyContent:"center"}}>🔄</button>
@@ -811,11 +827,11 @@ export default function FatherCare(){
       </div>
 
       {/* Tabs */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,display:"flex",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"8px 4px 10px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
-        {[["today","اليوم","⌂"],["continuity","الاستمرارية","♡"],["vitals","القياسات","◉"],["history","السجل","▤"],["notes","ملاحظات","✎"],["schedule","الجدول","▦"]].map(([k,l,icon])=>(
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,display:"flex",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"7px 4px 9px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
+        {[["today","اليوم"],["continuity","الاستمرارية"],["vitals","القياسات"],["history","السجل"],["notes","ملاحظات"],["schedule","الجدول"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)}
-            style={{flex:1,padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Tajawal",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            <span style={{fontSize:18,lineHeight:1,color:tab===k?"#3978b9":S.muted}}>{icon}</span><span>{l}</span>
+            style={{flex:1,padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Tajawal",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <NavIcon name={k} active={tab===k}/><span>{l}</span>
           </button>
         ))}
       </div>
@@ -825,7 +841,7 @@ export default function FatherCare(){
         {/* TODAY */}
         {tab==="today"&&<div className="slide-up">
           <button className="card" onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:16,marginBottom:12,display:"flex",alignItems:"center",gap:14,textAlign:"right",fontFamily:"Tajawal",cursor:"pointer",color:S.text}}>
-            <div style={{width:62,height:62,borderRadius:19,flexShrink:0,background:"linear-gradient(135deg,#76b7f4,#4f8ed5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,color:"#fff",boxShadow:"0 8px 18px rgba(79,142,213,.24)"}}>♡</div>
+            <div style={{width:72,height:62,borderRadius:19,flexShrink:0,background:night?"rgba(255,255,255,.92)":"#f8fcff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 18px rgba(79,142,213,.16)"}}><img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:68,height:48,objectFit:"contain"}}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:18,fontWeight:900,color:night?"#fff":S.text}}>استمرارية الرعاية</div>
               <div style={{fontSize:11,color:night?"#bfdbfe":S.subtext,lineHeight:1.7,marginTop:4}}>نتحقق أن رعاية دعث تستمر حتى عند تعذر المسؤول</div>

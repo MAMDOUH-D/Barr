@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon-512.png', 'icon-192.png', 'apple-touch-icon.png'],
+      includeAssets: ['icon-512.png', 'icon-192.png', 'apple-touch-icon.png', 'barr-logo.png', 'barr-logo-mark.png'],
       manifest: {
         name: 'بارّ',
         short_name: 'بارّ',

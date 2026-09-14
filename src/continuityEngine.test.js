@@ -5,6 +5,7 @@ import {
   DEMO_CONTINUITY_TASKS,
   ensureDemoTask,
   evaluateContinuity,
+  normalizeFamilyName,
   repairContinuityRequirement,
 } from "./continuityEngine.js";
 
@@ -19,10 +20,17 @@ test("demo fails only because access to medication is missing", () => {
 
 test("three demo scenarios expose three different failure causes", () => {
   assert.equal(DEMO_CONTINUITY_TASKS.length, 3);
+  assert.equal(DEMO_CONTINUITY_TASKS[1].continuity.primary, "مفلح");
   assert.deepEqual(
     DEMO_CONTINUITY_TASKS.map((task) => evaluateContinuity(task).missing.map(({ key }) => key)),
     [["canAccessResource"], ["knowsInstructions"], ["available"]],
   );
+});
+
+test("legacy family name is migrated to Muflih", () => {
+  assert.equal(normalizeFamilyName("صاهود"), "مفلح");
+  const [task] = ensureDemoTask([{id:"legacy",continuity:{primary:"صاهود",backup:"عبدالله",requirements:{}}}]);
+  assert.equal(task.continuity.primary, "مفلح");
 });
 
 test("repairing the missing requirement makes the proof pass", () => {
