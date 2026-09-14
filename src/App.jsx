@@ -331,12 +331,10 @@ function PinScreen({name,onSuccess,onBack,pins,night}){
 // ── Select User ───────────────────────────────────────────────────────────
 function SelectUser({onSelect,night}){
   const S=getTheme(night);
-  const brandColor=night?"#fff":S.text;
   return(
     <div style={{minHeight:"100vh",background:S.bg,fontFamily:"'Tajawal',sans-serif"}} className="slide-up" dir="rtl">
       <div style={{background:S.header,padding:"40px 20px 30px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-        <div style={{fontSize:40}}>🤍</div>
-        <div style={{fontSize:30,fontWeight:900,color:brandColor}}>بار</div>
+        <img src="/barr-logo.png" alt="شعار بار" style={{width:180,height:120,objectFit:"contain"}}/>
         <div style={{fontSize:13,color:night?"rgba(255,255,255,0.7)":S.subtext}}>رعاية أعمق لحياة أطمئن</div>
         <div style={{fontSize:12,color:night?"rgba(255,255,255,0.7)":S.muted,marginTop:6}}>اختر اسمك للدخول</div>
       </div>
@@ -779,10 +777,9 @@ export default function FatherCare(){
       <div style={{background:S.header,padding:"18px 20px 20px",borderBottom:`1px solid ${S.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:42,height:42,borderRadius:15,background:night?"rgba(255,255,255,.12)":"#e8f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>🤍</div>
+            <img src="/barr-logo.png" alt="شعار بار" style={{width:96,height:60,objectFit:"contain",flexShrink:0}}/>
             <div>
-              <div style={{fontSize:27,fontWeight:900,color:night?"#fff":S.text,lineHeight:1}}>بار</div>
-              <div style={{fontSize:10,color:night?"rgba(255,255,255,.68)":S.subtext,marginTop:6}}>رعاية أعمق لحياة أطمئن</div>
+              <div style={{fontSize:10,color:night?"rgba(255,255,255,.68)":S.subtext,lineHeight:1.6}}>رعاية أعمق<br/>لحياة أطمئن</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
