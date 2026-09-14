@@ -4,6 +4,14 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "firebase/firestor
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  CONTINUITY_REQUIREMENTS,
+  DEMO_CONTINUITY_TASK,
+  ensureDemoTask,
+  evaluateContinuity,
+  normalizeContinuity,
+  repairContinuityRequirement,
+} from "./continuityEngine.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAivsLIktDqF2OCd8clRsIi3NNvrAh80b0",
@@ -31,14 +39,20 @@ const fbSet = async (key,value) => {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const FAMILY_MEMBERS = ["صاهود","مضحي","ممدوح","محمد","عبدالله","ماجد","مدعث"];
+const FAMILY_RELATIONSHIPS = {
+  صاهود:"الابن الأكبر",
+  مضحي:"ابن",
+  ممدوح:"ابن",
+  محمد:"ابن",
+  عبدالله:"ابن",
+  ماجد:"الحفيد الأكبر",
+  مدعث:"حفيد",
+};
 const ADMIN = "ممدوح";
 const ADMIN_EMAIL = "mamdooh.f16@gmail.com";
-const ONESIGNAL_APP_ID = "c3e90e30-9e96-414c-88c0-559a2b9ecd3e";
-const ONESIGNAL_API_KEY = "os_v2_app_ypuq4me6szauzcgakwncxhwnh2ksna5mjnzu3wegarpr6nyla5ge2nuxqmdrgcnzinwo53mrrtbjzd5pugficqtzipuktkfmb7sttby";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const getToday = () => new Date().toISOString().split("T")[0];
-const getHour  = () => new Date().getHours();
 const getTime  = () => new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit",hour12:true});
 const formatDate = () => new Date().toLocaleDateString("ar-SA",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
 const formatDateAr = (iso) => new Date(iso).toLocaleDateString("ar-SA",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
@@ -46,7 +60,8 @@ const formatTime12 = (t) => {
   const [h,m] = t.split(":").map(Number);
   return `${h%12===0?12:h%12}:${String(m).padStart(2,"0")} ${h>=12?"م":"ص"}`;
 };
-const isNightMode = () => { const h=getHour(); return h>=18||h<6; };
+const continuityStatusLabel = (status) => status==="PASS"?"مكتملة":"غير مكتملة";
+const formatArabicNumber = (value) => Number(value).toLocaleString("ar-SA");
 
 // ── Default Schedule ──────────────────────────────────────────────────────
 const DEFAULT_SCHEDULE = [
@@ -239,21 +254,22 @@ const generateWeeklyPDF = async (schedule, weekDays) => {
 
 // ── CSS ───────────────────────────────────────────────────────────────────
 const getCSS = (night) => `
-  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:${night?"#0f172a":"#f1f5f9"};}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Thmanyah Sans",sans-serif!important;}
+  body{background:${night?"#0f172a":"#eee9e1"};}
   ::-webkit-scrollbar{width:4px;}
   ::-webkit-scrollbar-thumb{background:#334155;border-radius:2px;}
   @keyframes slideUp{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+  @keyframes proofPulse{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.15);opacity:1}}
   .slide-up{animation:slideUp 0.35s ease;}
   .fade-in{animation:fadeIn 0.2s ease;}
   .shake{animation:shake 0.4s ease;}
-  .btn:hover{filter:brightness(1.1);transform:translateY(-1px);}
+  .proof-pulse{animation:proofPulse 0.8s ease-in-out infinite;}
+  .btn:hover{filter:brightness(1.03);transform:translateY(-1px);}
   .btn{transition:all 0.2s ease;}
-  .card:hover{transform:translateX(-3px);}
-  .card{transition:transform 0.2s;}
+  .card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(24,49,83,.08);}
+  .card{transition:transform 0.2s,box-shadow 0.2s;}
 `;
 
 // ── Theme ─────────────────────────────────────────────────────────────────
@@ -262,9 +278,9 @@ const getTheme=(night)=>night?{
   text:"#f1f5f9",muted:"#64748b",border:"#334155",subtext:"#94a3b8",
   tabBg:"#0f172a",tabBorder:"#1e293b",doneBg:"#0f2744",doneBorder:"#1e3a5f",
 }:{
-  bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",header:"linear-gradient(135deg,#1e40af,#1e3a8a)",
-  text:"#1e293b",muted:"#94a3b8",border:"#e2e8f0",subtext:"#64748b",
-  tabBg:"#ffffff",tabBorder:"#e2e8f0",doneBg:"#f0fdf4",doneBorder:"#bbf7d0",
+  bg:"#f8f4ed",card:"#fffdfa",card2:"#f3f7fb",header:"linear-gradient(155deg,#fffaf2 0%,#f5efe5 58%,#eaf4fb 100%)",
+  text:"#12315a",muted:"#7b8da3",border:"#e6e0d7",subtext:"#62748a",
+  tabBg:"rgba(255,253,250,.97)",tabBorder:"#e6e0d7",doneBg:"#f1faf5",doneBorder:"#c7ead4",
 };
 
 // ── PIN Screen ────────────────────────────────────────────────────────────
@@ -315,19 +331,24 @@ function PinScreen({name,onSuccess,onBack,pins,night}){
 // ── Select User ───────────────────────────────────────────────────────────
 function SelectUser({onSelect,night}){
   const S=getTheme(night);
+  const brandColor=night?"#fff":S.text;
   return(
     <div style={{minHeight:"100vh",background:S.bg,fontFamily:"'Tajawal',sans-serif"}} className="slide-up" dir="rtl">
       <div style={{background:S.header,padding:"40px 20px 30px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
         <div style={{fontSize:40}}>🤍</div>
-        <div style={{fontSize:24,fontWeight:900,color:"#fff"}}>بار</div>
-        <div style={{fontSize:13,color:"rgba(255,255,255,0.7)"}}>اختر اسمك للدخول</div>
+        <div style={{fontSize:30,fontWeight:900,color:brandColor}}>بار</div>
+        <div style={{fontSize:13,color:night?"rgba(255,255,255,0.7)":S.subtext}}>رعاية أعمق لحياة أطمئن</div>
+        <div style={{fontSize:12,color:night?"rgba(255,255,255,0.7)":S.muted,marginTop:6}}>اختر اسمك للدخول</div>
       </div>
       <div style={{padding:16}}>
         {FAMILY_MEMBERS.map(name=>(
           <button key={name} className="btn" onClick={()=>onSelect(name)}
             style={{width:"100%",background:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:16,marginBottom:10,display:"flex",alignItems:"center",gap:12,cursor:"pointer",color:S.text,fontFamily:"Tajawal"}}>
             <span style={{fontSize:22,width:40,height:40,background:S.bg,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center"}}>👤</span>
-            <span style={{flex:1,fontSize:16,fontWeight:700,textAlign:"right"}}>{name}</span>
+            <span style={{flex:1,textAlign:"right"}}>
+              <span style={{display:"block",fontSize:16,fontWeight:700}}>{name}</span>
+              <span style={{display:"block",fontSize:11,color:S.muted,marginTop:2}}>{FAMILY_RELATIONSHIPS[name]}</span>
+            </span>
             <span style={{color:S.muted,fontSize:16}}>←</span>
           </button>
         ))}
@@ -403,13 +424,134 @@ function PinSetup({pins,onSave,night}){
   );
 }
 
+// ── Care Continuity Proof ─────────────────────────────────────────────────
+function CareContinuity({tasks,onUpdate,night}){
+  const S=getTheme(night);
+  const danger={bg:night?"#450a0a":"#fff0ee",border:night?"#ef4444":"#f5c7c2",title:night?"#fca5a5":"#a33b32",text:night?"#fecaca":"#b85a51"};
+  const success={bg:night?"#052e16":"#edf9f1",border:night?"#22c55e":"#b9dfc6",title:night?"#86efac":"#277a50",text:night?"#bbf7d0":"#478466"};
+  const continuityTasks=tasks.filter(task=>task.continuity);
+  const [selectedId,setSelectedId]=useState(DEMO_CONTINUITY_TASK.id);
+  const [view,setView]=useState("overview");
+  const [checking,setChecking]=useState(false);
+  const selected=continuityTasks.find(task=>task.id===selectedId)||continuityTasks[0];
+  const result=selected?evaluateContinuity(selected):null;
+  const failing=continuityTasks.filter(task=>evaluateContinuity(task).status==="FAIL");
+  const criticalFailing=failing.filter(task=>normalizeContinuity(task.continuity).importance==="critical");
+  const tasksSummary=`${formatArabicNumber(continuityTasks.length)} ${continuityTasks.length===1?"مهمة خاضعة":"مهام خاضعة"} للفحص`;
+  const risksSummary=`${formatArabicNumber(criticalFailing.length)} ${criticalFailing.length===1?"مهمة حرجة بها نقطة ضعف":"مهام حرجة بها نقاط ضعف"}`;
+
+  const runCheck=()=>{
+    setChecking(true);
+    setView("check");
+    setTimeout(()=>setChecking(false),850);
+  };
+
+  const repair=(key)=>{
+    if(!selected)return;
+    setChecking(true);
+    onUpdate(repairContinuityRequirement(selected,key));
+    setTimeout(()=>setChecking(false),850);
+  };
+
+  if(!selected)return <div style={{textAlign:"center",padding:36,color:S.muted}}>لا توجد مهام مهيأة لفحص الاستمرارية.</div>;
+
+  if(view==="overview")return(
+    <div className="slide-up">
+      <div style={{background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:18,marginBottom:14,color:night?"#fff":S.text}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+          <div>
+            <div style={{fontSize:12,color:night?"#93c5fd":"#3978b9",fontWeight:700,marginBottom:5}}>♡ استمرارية الرعاية</div>
+            <div style={{fontSize:21,fontWeight:900}}>{failing.length?"تحتاج انتباهًا":"الرعاية جاهزة للاستمرار"}</div>
+            <div style={{fontSize:12,color:night?"#bfdbfe":S.subtext,marginTop:6,lineHeight:1.7}}>{tasksSummary} • {risksSummary}</div>
+          </div>
+          <div style={{background:failing.length?(night?"#7f1d1d":"#fbd8d4"):(night?"#14532d":"#dff2e6"),color:failing.length?(night?"#fff":"#a33b32"):(night?"#fff":"#277a50"),borderRadius:12,padding:"8px 10px",fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>{failing.length?"تحتاج انتباهًا":"مكتملة"}</div>
+        </div>
+      </div>
+      <div style={{fontSize:12,fontWeight:700,color:S.muted,margin:"0 2px 10px"}}>المهام ذات خطة استمرارية</div>
+      {continuityTasks.map(task=>{
+        const taskResult=evaluateContinuity(task);
+        const c=normalizeContinuity(task.continuity);
+        return(
+          <button key={task.id} className="card" onClick={()=>{setSelectedId(task.id);setView("details");}}
+            style={{width:"100%",textAlign:"right",background:taskResult.status==="FAIL"?danger.bg:S.card,border:`1px solid ${taskResult.status==="FAIL"?danger.border:S.border}`,borderRadius:18,padding:15,marginBottom:10,color:S.text,fontFamily:"Tajawal",cursor:"pointer"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{fontSize:24}}>{task.icon||"🧩"}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:800,fontSize:15}}>{task.name}</div>
+                <div style={{fontSize:11,color:S.muted,marginTop:3}}>{formatTime12(task.time)} • {c.primary} ← {c.backup}</div>
+                <div style={{fontSize:10,color:S.subtext,marginTop:2}}>{FAMILY_RELATIONSHIPS[c.primary]||"مقدم رعاية"} ← {FAMILY_RELATIONSHIPS[c.backup]||"مقدم رعاية"}</div>
+              </div>
+              <div style={{color:taskResult.status==="PASS"?success.title:danger.title,fontWeight:900,fontSize:12}}>{continuityStatusLabel(taskResult.status)}</div>
+            </div>
+            {taskResult.status==="FAIL"&&<div style={{fontSize:11,color:danger.text,marginTop:9}}>نقطة الضعف: {taskResult.missing[0].label}</div>}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const c=normalizeContinuity(selected.continuity);
+  return(
+    <div className="slide-up">
+      <button onClick={()=>setView("overview")} style={{background:"none",border:"none",color:night?"#38bdf8":"#3978b9",fontFamily:"Tajawal",fontWeight:700,cursor:"pointer",marginBottom:12}}>→ لوحة الاستمرارية</button>
+      <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:18,padding:18,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+          <div>
+            <div style={{fontSize:19,fontWeight:900,color:S.text}}>{selected.name}</div>
+            <div style={{fontSize:12,color:S.muted,marginTop:4}}>{formatTime12(selected.time)} • الأهمية: <span style={{color:c.importance==="critical"?"#ef4444":"#38bdf8",fontWeight:800}}>{c.importance==="critical"?"حرجة":"عادية"}</span></div>
+          </div>
+          <div style={{fontSize:25}}>{selected.icon||"🧩"}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:15}}>
+          <div style={{background:S.bg,borderRadius:12,padding:11}}><div style={{fontSize:10,color:S.muted}}>المسؤول الأساسي</div><div style={{fontSize:15,fontWeight:800,color:S.text,marginTop:3}}>{c.primary}</div><div style={{fontSize:10,color:S.subtext,marginTop:2}}>{FAMILY_RELATIONSHIPS[c.primary]||"مقدم رعاية"}</div></div>
+          <div style={{background:S.bg,borderRadius:12,padding:11}}><div style={{fontSize:10,color:S.muted}}>البديل</div><div style={{fontSize:15,fontWeight:800,color:S.text,marginTop:3}}>{c.backup}</div><div style={{fontSize:10,color:S.subtext,marginTop:2}}>{FAMILY_RELATIONSHIPS[c.backup]||"مقدم رعاية"}</div></div>
+        </div>
+      </div>
+
+      {view==="details"&&<>
+        <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:15,marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:800,color:S.text,marginBottom:10}}>جاهزية {c.backup}</div>
+          {CONTINUITY_REQUIREMENTS.map(requirement=><div key={requirement.key} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${S.border}`,fontSize:13,color:S.text}}><span>{requirement.label}</span><span>{c.requirements[requirement.key]?"✅":"❌"}</span></div>)}
+        </div>
+        <div style={{background:result.status==="FAIL"?danger.bg:success.bg,border:`1px solid ${result.status==="FAIL"?danger.border:success.border}`,borderRadius:16,padding:14,marginBottom:12}}>
+          <div style={{fontWeight:900,color:result.status==="FAIL"?danger.title:success.title}}>{result.status==="FAIL"?"⚠️ الاستمرارية غير مكتملة":"✅ تم التحقق من الاستمرارية"}</div>
+          <div style={{fontSize:12,color:result.status==="FAIL"?danger.text:success.text,marginTop:5,lineHeight:1.7}}>{result.status==="FAIL"?"يوجد بديل، لكنه غير جاهز لتنفيذ المهمة بالكامل.":`إذا تعذر ${c.primary}، يستطيع ${c.backup} تنفيذ المهمة بالكامل.`}</div>
+        </div>
+        <button className="btn" onClick={runCheck} style={{...NS.btnConfirm,width:"100%",background:"#2563eb"}}>اختبر استمرارية المهمة</button>
+      </>}
+
+      {view==="check"&&<div>
+        <div style={{textAlign:"center",background:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:18,marginBottom:12}}>
+          <div style={{fontSize:12,color:S.muted}}>ماذا لو تعذر {c.primary}؟</div>
+          <div style={{fontSize:16,fontWeight:800,color:danger.title,marginTop:6}}>{c.primary} • غير متاح ❌</div>
+          <div style={{height:22,borderRight:"2px dashed #64748b",width:"50%"}}/>
+          <div style={{fontSize:16,fontWeight:800,color:"#38bdf8"}}>الانتقال إلى {c.backup}</div>
+        </div>
+        {checking?<div style={{textAlign:"center",padding:35,color:"#38bdf8",fontWeight:800}}><div className="proof-pulse" style={{fontSize:34,marginBottom:8}}>🛡️</div>جاري فحص مسار التنفيذ...</div>:<>
+          <div style={{background:result.status==="FAIL"?danger.bg:success.bg,border:`1px solid ${result.status==="FAIL"?danger.border:success.border}`,borderRadius:20,padding:20,textAlign:"center",marginBottom:12}}>
+            <div style={{fontSize:26,fontWeight:900,color:result.status==="FAIL"?danger.title:success.title}}>{result.status==="FAIL"?"❌ ستنقطع هذه المهمة":"✅ تم إثبات الاستمرارية"}</div>
+            <div style={{fontSize:12,lineHeight:1.8,color:result.status==="FAIL"?danger.text:success.text,marginTop:8}}>{result.status==="FAIL"?`إذا تعذر ${c.primary}، لا يوجد مسار كامل لتنفيذ ${selected.name}.`:`${c.primary} ← ${c.backup} • جميع متطلبات التنفيذ مكتملة.`}</div>
+          </div>
+          {result.missing.map(requirement=><div key={requirement.key} style={{background:danger.bg,border:`1px solid ${danger.border}`,borderRadius:18,padding:16,marginBottom:10}}>
+            <div style={{fontSize:11,color:danger.title,fontWeight:800}}>نقطة الضعف المكتشفة</div>
+            <div style={{fontSize:17,fontWeight:900,color:S.text,marginTop:5}}>🔑 {requirement.label}</div>
+            <div style={{fontSize:12,color:S.muted,lineHeight:1.7,margin:"7px 0 12px"}}>مسار {c.backup} غير مكتمل لأن هذا المتطلب غير مؤكد.</div>
+            <button className="btn" onClick={()=>repair(requirement.key)} style={{...NS.btnConfirm,width:"100%",background:"#275d91"}}>{requirement.repairLabel}</button>
+          </div>)}
+          {result.status==="PASS"&&<button onClick={()=>setView("overview")} style={{...NS.btnConfirm,width:"100%",background:"#16a34a"}}>العودة إلى لوحة الاستمرارية</button>}
+        </>}
+      </div>}
+    </div>
+  );
+}
+
 // ── MAIN APP ──────────────────────────────────────────────────────────────
 export default function FatherCare(){
   const [screen,setScreen]=useState("select");
   const [activeUser,setActiveUser]=useState(null);
   const [pins,setPins]=useState({});
   const [tab,setTab]=useState("today");
-  const [schedule,setSchedule]=useState([...DEFAULT_SCHEDULE]);
+  const [schedule,setSchedule]=useState(()=>ensureDemoTask(DEFAULT_SCHEDULE));
   const [logs,setLogs]=useState({});
   const [notes,setNotes]=useState([]);
   const [vitals,setVitals]=useState({});
@@ -423,21 +565,17 @@ export default function FatherCare(){
   const [historyLogs,setHistoryLogs]=useState(null);
   const [historyNotes,setHistoryNotes]=useState(null);
   const [historyVitals,setHistoryVitals]=useState(null);
-  const [addForm,setAddForm]=useState({name:"",dose:"",time:"08:00",type:"medication",icon:"💊",meal:"الفطور"});
+  const emptyAddForm={name:"",dose:"",time:"08:00",type:"medication",icon:"💊",meal:"الفطور",primary:"",backup:"",importance:"normal",requirements:Object.fromEntries(CONTINUITY_REQUIREMENTS.map(({key})=>[key,true]))};
+  const [addForm,setAddForm]=useState(emptyAddForm);
   const [noteText,setNoteText]=useState("");
   const [vitalForm,setVitalForm]=useState({bp_sys:"",bp_dia:"",sugar:"",period:"صباح"});
   const [savingId,setSavingId]=useState(null);
   const [notification,setNotification]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
-  const [night,setNight]=useState(isNightMode());
+  const [night,setNight]=useState(false);
   const today=getToday();
   const S=getTheme(night);
   const lateCheckRef=useRef(null);
-
-  useEffect(()=>{
-    const t=setInterval(()=>setNight(isNightMode()),60000);
-    return()=>clearInterval(t);
-  },[]);
 
   // Restore session
   useEffect(()=>{
@@ -467,7 +605,8 @@ export default function FatherCare(){
       const [sched,logs_,notes_,pins_,vitals_]=await Promise.all([
         fbGet("schedule"),fbGet(`logs_${today}`),fbGet(`notes_${today}`),fbGet("pins"),fbGet(`vitals_${today}`)
       ]);
-      if(sched)setSchedule(JSON.parse(sched));
+      if(sched)setSchedule(ensureDemoTask(JSON.parse(sched)));
+      else setSchedule(current=>ensureDemoTask(current));
       if(logs_)setLogs(JSON.parse(logs_));
       if(notes_)setNotes(JSON.parse(notes_));
       if(pins_)setPins(JSON.parse(pins_));
@@ -478,9 +617,10 @@ export default function FatherCare(){
 
   useEffect(()=>{
     if(loading)return;
-    const u1=onSnapshot(doc(db,"barr",`logs_${today}`),(s)=>{if(s.exists())setLogs(JSON.parse(s.data().value));});
-    const u2=onSnapshot(doc(db,"barr",`notes_${today}`),(s)=>{if(s.exists())setNotes(JSON.parse(s.data().value));});
-    const u3=onSnapshot(doc(db,"barr",`vitals_${today}`),(s)=>{if(s.exists())setVitals(JSON.parse(s.data().value));});
+    const ignoreUnavailable=()=>{};
+    const u1=onSnapshot(doc(db,"barr",`logs_${today}`),(s)=>{if(s.exists())setLogs(JSON.parse(s.data().value));},ignoreUnavailable);
+    const u2=onSnapshot(doc(db,"barr",`notes_${today}`),(s)=>{if(s.exists())setNotes(JSON.parse(s.data().value));},ignoreUnavailable);
+    const u3=onSnapshot(doc(db,"barr",`vitals_${today}`),(s)=>{if(s.exists())setVitals(JSON.parse(s.data().value));},ignoreUnavailable);
     return()=>{u1();u2();u3();};
   },[loading]);
 
@@ -490,7 +630,7 @@ export default function FatherCare(){
     lateCheckRef.current=setInterval(()=>{
       const now=new Date();
       const nowMins=now.getHours()*60+now.getMinutes();
-      schedule.forEach(item=>{
+      schedule.filter(item=>!item.demoOnly).forEach(item=>{
         if(logs[item.id])return;
         const [h,m]=item.time.split(":").map(Number);
         const itemMins=h*60+m;
@@ -503,7 +643,11 @@ export default function FatherCare(){
   },[activeUser,schedule,logs]);
 
   const savePins=async(p)=>{setPins(p);await fbSet("pins",JSON.stringify(p));showNotif("✅ تم حفظ الرقم السري");};
-  const saveSchedule=async(s)=>{setSchedule(s);await fbSet("schedule",JSON.stringify(s));};
+  const saveSchedule=async(s)=>{
+    const safeSchedule=ensureDemoTask(s);
+    setSchedule(safeSchedule);
+    await fbSet("schedule",JSON.stringify(safeSchedule.filter(item=>!item.demoOnly)));
+  };
 
   const markDone=async(item)=>{
     setSavingId(item.id);
@@ -522,13 +666,28 @@ export default function FatherCare(){
 
   const addItem=async()=>{
     if(!addForm.name||!addForm.time)return;
-    const s=[...schedule,{...addForm,id:`c_${Date.now()}`}];
+    const {primary,backup,importance,requirements,...taskFields}=addForm;
+    if(Boolean(primary)!==Boolean(backup)){
+      showNotif("⚠️ حدد المسؤول الأساسي والبديل معًا");
+      return;
+    }
+    const continuity=primary&&backup?{primary,backup,importance,requirements}:undefined;
+    const s=[...schedule,{...taskFields,continuity,id:`c_${Date.now()}`}];
     await saveSchedule(s);
-    setAddForm({name:"",dose:"",time:"08:00",type:"medication",icon:"💊",meal:"الفطور"});
+    setAddForm(emptyAddForm);
     setShowAddModal(false);showNotif("✅ تم الإضافة");
   };
 
   const deleteItem=async(id)=>{await saveSchedule(schedule.filter(i=>i.id!==id));showNotif("🗑️ تم الحذف");};
+
+  const updateContinuityTask=async(updatedTask)=>{
+    const updatedSchedule=schedule.map(task=>task.id===updatedTask.id?updatedTask:task);
+    if(updatedTask.demoOnly){
+      setSchedule(updatedSchedule);
+      return;
+    }
+    await saveSchedule(updatedSchedule);
+  };
 
   const addNote=async()=>{
     if(!noteText.trim())return;
@@ -599,8 +758,9 @@ export default function FatherCare(){
 
   const logout=()=>{setScreen("select");setActiveUser(null);setTab("today");localStorage.removeItem("barr_session");};
 
-  const todayItems=[...schedule].sort((a,b)=>a.time.localeCompare(b.time));
+  const todayItems=schedule.filter(item=>!item.demoOnly).sort((a,b)=>a.time.localeCompare(b.time));
   const doneCount=todayItems.filter(i=>logs[i.id]).length;
+  const continuityRiskCount=schedule.filter(item=>item.continuity&&evaluateContinuity(item).status==="FAIL").length;
   const meals=["الفطور","الغداء","العشاء"];
   const pastDays=Array.from({length:7},(_,i)=>{
     const d=new Date();d.setDate(d.getDate()-i-1);
@@ -616,50 +776,77 @@ export default function FatherCare(){
       <style>{getCSS(night)}</style>
 
       {/* Header */}
-      <div style={{background:S.header,padding:"20px 20px 14px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div>
-            <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>بار 🤍</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:2}}>{formatDate()}</div>
+      <div style={{background:S.header,padding:"18px 20px 20px",borderBottom:`1px solid ${S.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:42,height:42,borderRadius:15,background:night?"rgba(255,255,255,.12)":"#e8f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>🤍</div>
+            <div>
+              <div style={{fontSize:27,fontWeight:900,color:night?"#fff":S.text,lineHeight:1}}>بار</div>
+              <div style={{fontSize:10,color:night?"rgba(255,255,255,.68)":S.subtext,marginTop:6}}>رعاية أعمق لحياة أطمئن</div>
+            </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button className="btn" onClick={()=>{setLoading(true);loadData();}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>🔄</button>
-            <button className="btn" onClick={async()=>{ await requestNotifPermission(); showNotif("🔔 تم طلب إذن الإشعارات");}} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}} title="تفعيل الإشعارات">🔔</button>
-            <button className="btn" onClick={()=>setNight(n=>!n)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:10,width:36,height:36,fontSize:16,cursor:"pointer",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{night?"☀️":"🌙"}</button>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <button className="btn" onClick={()=>{setLoading(true);loadData();}} style={{background:night?"rgba(255,255,255,.12)":S.card,border:`1px solid ${S.border}`,borderRadius:12,width:36,height:36,fontSize:15,cursor:"pointer",color:S.text,display:"flex",alignItems:"center",justifyContent:"center"}}>🔄</button>
+            <button className="btn" onClick={async()=>{ await requestNotifPermission(); showNotif("🔔 تم طلب إذن الإشعارات");}} style={{background:night?"rgba(255,255,255,.12)":S.card,border:`1px solid ${S.border}`,borderRadius:12,width:36,height:36,fontSize:15,cursor:"pointer",color:S.text,display:"flex",alignItems:"center",justifyContent:"center"}} title="تفعيل الإشعارات">🔔</button>
+            <button className="btn" onClick={()=>setNight(n=>!n)} style={{background:night?"rgba(255,255,255,.12)":S.card,border:`1px solid ${S.border}`,borderRadius:12,width:36,height:36,fontSize:15,cursor:"pointer",color:S.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{night?"☀️":"🌙"}</button>
             <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg width="50" height="50" viewBox="0 0 56 56">
-                <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5"/>
-                <circle cx="28" cy="28" r="22" fill="none" stroke="#38bdf8" strokeWidth="5"
+              <svg width="46" height="46" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="22" fill="none" stroke={night?"rgba(255,255,255,.2)":"#dce8f4"} strokeWidth="5"/>
+                <circle cx="28" cy="28" r="22" fill="none" stroke="#67a9ec" strokeWidth="5"
                   strokeDasharray={`${2*Math.PI*22}`}
                   strokeDashoffset={`${2*Math.PI*22*(1-doneCount/Math.max(todayItems.length,1))}`}
                   strokeLinecap="round" transform="rotate(-90 28 28)" style={{transition:"stroke-dashoffset 0.5s ease"}}/>
               </svg>
-              <div style={{position:"absolute",fontSize:11,fontWeight:700,color:"#38bdf8"}}>{doneCount}/{todayItems.length}</div>
+              <div style={{position:"absolute",fontSize:10,fontWeight:800,color:"#3978b9"}}>{doneCount}/{todayItems.length}</div>
             </div>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(56,189,248,0.2)",border:"1px solid rgba(56,189,248,0.3)",borderRadius:20,padding:"4px 12px",fontSize:13,color:"#7dd3fc"}}>
-            <span>👤</span><span>{activeUser}</span><span style={{fontSize:10,color:"#4ade80"}}>🔒</span>
+        <div style={{marginTop:18}}>
+          <div style={{fontSize:21,fontWeight:900,color:night?"#fff":S.text}}>معًا.. تستمر رعاية دعث</div>
+          <div style={{fontSize:11,color:night?"rgba(255,255,255,.65)":S.subtext,marginTop:4}}>{formatDate()} • لأن الاهتمام لا يتوقف</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:night?"rgba(56,189,248,.14)":"#e8f3ff",border:"1px solid #cfe4f7",borderRadius:20,padding:"5px 12px",fontSize:12,color:night?"#7dd3fc":"#275d91"}}>
+            <span>👤</span><span>{activeUser}</span><span style={{fontSize:9,color:"#2f9d68"}}>●</span>
           </div>
-          <button onClick={logout} style={{marginRight:"auto",background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"3px 10px",fontSize:11,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontFamily:"Tajawal"}}>خروج</button>
+          <button onClick={logout} style={{marginRight:"auto",background:"none",border:`1px solid ${S.border}`,borderRadius:10,padding:"4px 11px",fontSize:11,color:S.muted,cursor:"pointer",fontFamily:"Tajawal"}}>خروج</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{display:"flex",background:S.tabBg,borderBottom:`1px solid ${S.tabBorder}`,padding:"0 4px",overflowX:"auto"}}>
-        {[["today","اليوم"],["vitals","قياسات"],["history","السجل"],["notes","ملاحظات"],["schedule","الجدول"]].map(([k,l])=>(
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,display:"flex",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"8px 4px 10px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
+        {[["today","اليوم","⌂"],["continuity","الاستمرارية","♡"],["vitals","القياسات","◉"],["history","السجل","▤"],["notes","ملاحظات","✎"],["schedule","الجدول","▦"]].map(([k,l,icon])=>(
           <button key={k} onClick={()=>setTab(k)}
-            style={{flex:1,padding:"11px 4px",background:"none",border:"none",color:tab===k?"#38bdf8":S.muted,fontSize:13,fontFamily:"Tajawal",cursor:"pointer",fontWeight:tab===k?700:500,borderBottom:tab===k?"2px solid #38bdf8":"2px solid transparent",whiteSpace:"nowrap",minWidth:60}}>
-            {l}
+            style={{flex:1,padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Tajawal",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:18,lineHeight:1,color:tab===k?"#3978b9":S.muted}}>{icon}</span><span>{l}</span>
           </button>
         ))}
       </div>
 
-      <div style={{padding:16,overflowY:"auto",maxHeight:"calc(100vh - 180px)"}}>
+      <div style={{padding:"16px 16px 94px",overflowY:"auto",maxHeight:"calc(100vh - 205px)"}}>
 
         {/* TODAY */}
         {tab==="today"&&<div className="slide-up">
+          <button className="card" onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:16,marginBottom:12,display:"flex",alignItems:"center",gap:14,textAlign:"right",fontFamily:"Tajawal",cursor:"pointer",color:S.text}}>
+            <div style={{width:62,height:62,borderRadius:19,flexShrink:0,background:"linear-gradient(135deg,#76b7f4,#4f8ed5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,color:"#fff",boxShadow:"0 8px 18px rgba(79,142,213,.24)"}}>♡</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:18,fontWeight:900,color:night?"#fff":S.text}}>استمرارية الرعاية</div>
+              <div style={{fontSize:11,color:night?"#bfdbfe":S.subtext,lineHeight:1.7,marginTop:4}}>نتحقق أن رعاية دعث تستمر حتى عند تعذر المسؤول</div>
+            </div>
+            <div style={{fontSize:20,color:"#3978b9"}}>‹</div>
+          </button>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginBottom:12}}>
+            {[["today","▦","المهام"],["schedule","💊","الأدوية"],["vitals","◉","القياسات"],["history","▤","السجل"]].map(([key,icon,label])=><button key={key} onClick={()=>setTab(key)} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:15,padding:"11px 2px",fontFamily:"Tajawal",color:S.text,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><span style={{fontSize:19}}>{icon}</span><span style={{fontSize:10,fontWeight:700}}>{label}</span></button>)}
+          </div>
+
+          {continuityRiskCount>0&&<button onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"#450a0a":"#fff0ee",border:`1px solid ${night?"#ef4444":"#f5c7c2"}`,borderRadius:18,padding:"14px 16px",marginBottom:18,display:"flex",alignItems:"center",gap:12,textAlign:"right",fontFamily:"Tajawal",cursor:"pointer"}}>
+            <div style={{width:42,height:42,borderRadius:14,background:night?"#7f1d1d":"#fbd8d4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>!</div>
+            <div style={{flex:1}}><div style={{fontSize:16,fontWeight:900,color:night?"#fca5a5":"#a33b32"}}>تحتاج انتباهًا</div><div style={{fontSize:11,color:night?"#fecaca":"#b85a51",marginTop:2}}>{formatArabicNumber(continuityRiskCount)} مهام حرجة بها نقاط ضعف</div></div>
+            <span style={{color:night?"#fca5a5":"#a33b32",fontSize:18}}>‹</span>
+          </button>}
+
+          <div style={{fontSize:14,fontWeight:900,color:S.text,margin:"2px 2px 12px"}}>مهام اليوم</div>
           {meals.map(meal=>{
             const items=todayItems.filter(i=>i.meal===meal);
             if(items.length===0)return null;
@@ -684,11 +871,11 @@ export default function FatherCare(){
                   return(
                     <div key={item.id} className="card" style={{background:done?S.doneBg:S.card,borderRadius:14,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${late?"#ef4444":done?S.doneBorder:S.border}`}}>
                       <div style={{display:"flex",alignItems:"flex-start",gap:10,flex:1}}>
-                        <div style={{width:36,height:36,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,background:item.type==="medication"?"#1e3a5f":"#14532d"}}>{item.icon}</div>
+                        <div style={{width:38,height:38,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,background:item.type==="medication"?(night?"#1e3a5f":"#e8f3ff"):(night?"#14532d":"#eef7f0")}}>{item.icon}</div>
                         <div>
                           <div style={{fontSize:14,fontWeight:700,color:S.text}}>{item.name}</div>
                           <div style={{fontSize:11,color:S.muted,marginTop:1}}>{item.dose||item.desc} • {formatTime12(item.time)}</div>
-                          {done&&<div style={{fontSize:11,color:"#4ade80",marginTop:3,fontWeight:500}}>✅ {done.doneBy} — {done.doneAt}</div>}
+                          {done&&<div style={{fontSize:11,color:night?"#4ade80":"#2f9d68",marginTop:3,fontWeight:500}}>✅ {done.doneBy} — {done.doneAt}</div>}
                           {late&&!done&&<div style={{fontSize:11,color:"#ef4444",marginTop:3,fontWeight:600}}>⚠️ تأخر أكثر من ساعة</div>}
                         </div>
                       </div>
@@ -712,6 +899,9 @@ export default function FatherCare(){
             </div>
           )}
         </div>}
+
+        {/* CARE CONTINUITY */}
+        {tab==="continuity"&&<CareContinuity tasks={schedule} onUpdate={updateContinuityTask} night={night}/>}
 
         {/* VITALS */}
         {tab==="vitals"&&<div className="slide-up">
@@ -820,6 +1010,7 @@ export default function FatherCare(){
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:700,color:S.text}}>{item.name}</div>
                     <div style={{fontSize:11,color:S.muted,marginTop:1}}>{item.dose||item.desc} • {formatTime12(item.time)}</div>
+                    {item.continuity&&<div style={{fontSize:10,color:evaluateContinuity(item).status==="PASS"?"#22c55e":"#f59e0b",marginTop:4,fontWeight:700}}>🛡️ {normalizeContinuity(item.continuity).primary} ← {normalizeContinuity(item.continuity).backup} • {continuityStatusLabel(evaluateContinuity(item).status)}{item.demoOnly?" • تجريبي":""}</div>}
                   </div>
                   {activeUser===ADMIN&&item.id.startsWith("c_")&&(
                     <button onClick={()=>deleteItem(item.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,padding:4}}>🗑️</button>
@@ -927,6 +1118,38 @@ export default function FatherCare(){
             <div style={{marginBottom:14}}>
               <label style={{display:"block",fontSize:12,color:S.muted,marginBottom:6,fontWeight:600}}>الوقت</label>
               <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}} type="time" value={addForm.time} onChange={e=>setAddForm({...addForm,time:e.target.value})}/>
+            </div>
+            <div style={{height:1,background:S.border,margin:"16px 0"}}/>
+            <div style={{fontSize:14,fontWeight:800,color:S.text,marginBottom:8}}>🛡️ خطة استمرارية الرعاية</div>
+            <div style={{fontSize:11,color:S.muted,lineHeight:1.6,marginBottom:12}}>حدد المسؤول والبديل لإخضاع المهمة لفحص الاستمرارية.</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+              <div>
+                <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>المسؤول الأساسي</label>
+                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Tajawal",outline:"none"}} value={addForm.primary} onChange={e=>setAddForm({...addForm,primary:e.target.value,backup:addForm.backup===e.target.value?"":addForm.backup})}>
+                  <option value="">اختر</option>
+                  {FAMILY_MEMBERS.map(name=><option key={name} value={name}>{name} • {FAMILY_RELATIONSHIPS[name]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>البديل</label>
+                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Tajawal",outline:"none"}} value={addForm.backup} onChange={e=>setAddForm({...addForm,backup:e.target.value})}>
+                  <option value="">اختر</option>
+                  {FAMILY_MEMBERS.filter(name=>name!==addForm.primary).map(name=><option key={name} value={name}>{name} • {FAMILY_RELATIONSHIPS[name]}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>مستوى الأهمية</label>
+              <div style={{display:"flex",gap:8}}>
+                {[["normal","عادية"],["critical","حرجة"]].map(([value,label])=><button key={value} type="button" onClick={()=>setAddForm({...addForm,importance:value})} style={{flex:1,background:addForm.importance===value?(value==="critical"?"#7f1d1d":"#1e3a5f"):S.bg,border:`1px solid ${addForm.importance===value?(value==="critical"?"#ef4444":"#0ea5e9"):S.border}`,borderRadius:9,padding:8,color:addForm.importance===value?"#fff":S.muted,fontFamily:"Tajawal",cursor:"pointer"}}>{label}</button>)}
+              </div>
+            </div>
+            <div style={{fontSize:11,color:S.muted,marginBottom:6,fontWeight:700}}>متطلبات جاهزية البديل</div>
+            <div style={{background:S.bg,borderRadius:12,padding:"5px 10px",marginBottom:16}}>
+              {CONTINUITY_REQUIREMENTS.map(requirement=><label key={requirement.key} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",fontSize:12,color:S.text,cursor:"pointer"}}>
+                <input type="checkbox" checked={addForm.requirements[requirement.key]} onChange={e=>setAddForm({...addForm,requirements:{...addForm.requirements,[requirement.key]:e.target.checked}})}/>
+                <span>{requirement.label}</span>
+              </label>)}
             </div>
             <div style={{display:"flex",gap:10}}>
               <button className="btn" style={NS.btnConfirm} onClick={addItem}>✅ إضافة</button>
