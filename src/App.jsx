@@ -898,29 +898,29 @@ export default function FatherCare(){
       </div>
 
       {/* Tabs */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,height:78,display:"grid",gridTemplateColumns:"repeat(5,1fr)",alignItems:"end",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"7px 4px 8px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,height:76,display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",alignItems:"center",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"5px 4px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
         {[["today","اليوم"],["vitals","القياسات"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)}
-            style={{padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            style={{height:58,padding:"7px 1px 4px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,lineHeight:1.2}}>
             <NavIcon name={k} active={tab===k}/><span>{l}</span>
           </button>
         ))}
         <button onClick={()=>setTab("continuity")} aria-label="الاستمرارية"
-          style={{position:"relative",top:-15,padding:0,background:"none",border:"none",color:tab==="continuity"?"#176fa8":S.text,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-          <span style={{width:64,height:64,borderRadius:22,background:night?"linear-gradient(145deg,#f8fcff,#dceeff)":"linear-gradient(145deg,#fff,#e3f2ff)",border:`3px solid ${tab==="continuity"?"#54a7e1":S.tabBg}`,boxShadow:tab==="continuity"?"0 9px 24px rgba(45,129,190,.35)":"0 8px 22px rgba(18,76,124,.22)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:56,height:42,objectFit:"contain"}}/>
+          style={{position:"relative",top:-7,padding:0,background:"none",border:"none",color:tab==="continuity"?"#176fa8":S.text,fontSize:9.5,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:900,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,lineHeight:1.2}}>
+          <span style={{width:50,height:50,borderRadius:17,background:night?"linear-gradient(145deg,#f8fcff,#dceeff)":"linear-gradient(145deg,#fff,#e3f2ff)",border:`2px solid ${tab==="continuity"?"#54a7e1":S.tabBg}`,boxShadow:tab==="continuity"?"0 7px 18px rgba(45,129,190,.32)":"0 6px 16px rgba(18,76,124,.18)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:44,height:32,objectFit:"contain"}}/>
           </span>
           <span>الاستمرارية</span>
         </button>
         {[["notes","ملاحظات"],["schedule","الجدول"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)}
-            style={{padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            style={{height:58,padding:"7px 1px 4px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,lineHeight:1.2}}>
             <NavIcon name={k} active={tab===k}/><span>{l}</span>
           </button>
         ))}
       </div>
 
-      <div style={{padding:"16px 16px 116px",overflowY:"auto",maxHeight:"calc(100vh - 205px)"}}>
+      <div style={{padding:"16px 16px 104px",overflowY:"auto",maxHeight:"calc(100vh - 205px)"}}>
 
         {/* TODAY */}
         {tab==="today"&&<div className="slide-up">
