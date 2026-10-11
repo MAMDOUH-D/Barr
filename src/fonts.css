@@ -1,0 +1,55 @@
+@font-face {
+  font-family: "Thmanyah Extended";
+  src: url("/fonts/thmanyah-extended/thmanyahsans-Light.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Extended";
+  src: url("/fonts/thmanyah-extended/thmanyahsans-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Extended";
+  src: url("/fonts/thmanyah-extended/thmanyahsans-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Extended";
+  src: url("/fonts/thmanyah-extended/thmanyahsans-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Thmanyah Extended";
+  src: url("/fonts/thmanyah-extended/thmanyahsans-Black.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+
+:root {
+  font-family: "Thmanyah Extended", sans-serif;
+  font-synthesis: none;
+}
+
+html,
+body,
+#root,
+button,
+input,
+select,
+textarea {
+  font-family: "Thmanyah Extended", sans-serif;
+  font-feature-settings: "salt" 1;
+}

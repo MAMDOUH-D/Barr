@@ -13,6 +13,20 @@ import {
   normalizeContinuity,
   repairContinuityRequirement,
 } from "./continuityEngine.js";
+import {
+  DEFAULT_EMERGENCY_CONTACT,
+  DEFAULT_HEALTH_CARD,
+  createDialUri,
+  normalizeEmergencyContact,
+  normalizeHealthCard,
+} from "./healthSafety.js";
+import {
+  EmergencyCallModal,
+  EmergencyContactModal,
+  EmergencyView,
+  HealthCardModal,
+  HealthCardView,
+} from "./HealthAndEmergency.jsx";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAivsLIktDqF2OCd8clRsIi3NNvrAh80b0",
@@ -35,7 +49,8 @@ const fbGet = async (key) => {
   catch(e){return null;}
 };
 const fbSet = async (key,value) => {
-  try { await setDoc(doc(db,"barr",key),{value}); } catch(e){}
+  try { await setDoc(doc(db,"barr",key),{value}); return true; }
+  catch(e){ console.error(`Firebase save failed for ${key}`,e); return false; }
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -264,7 +279,7 @@ const generateWeeklyPDF = async (schedule, weekDays) => {
 
 // ── CSS ───────────────────────────────────────────────────────────────────
 const getCSS = (night) => `
-  *{box-sizing:border-box;margin:0;padding:0;font-family:"Thmanyah Sans",sans-serif!important;}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:"Thmanyah Extended",sans-serif!important;font-feature-settings:"salt" 1;}
   body{background:${night?"#0f172a":"#eee9e1"};}
   ::-webkit-scrollbar{width:4px;}
   ::-webkit-scrollbar-thumb{background:#334155;border-radius:2px;}
@@ -322,8 +337,8 @@ function PinScreen({name,onSuccess,onBack,pins,night}){
     }
   };
   return(
-    <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",fontFamily:"'Tajawal',sans-serif"}}>
-      <button onClick={onBack} style={{position:"absolute",top:20,right:20,background:"none",border:"none",color:S.muted,fontSize:14,cursor:"pointer",fontFamily:"Tajawal"}}>← رجوع</button>
+    <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,position:"relative",fontFamily:"'Thmanyah Extended',sans-serif"}}>
+      <button onClick={onBack} style={{position:"absolute",top:20,right:20,background:"none",border:"none",color:S.muted,fontSize:14,cursor:"pointer",fontFamily:"Thmanyah Extended"}}>← رجوع</button>
       <div style={{fontSize:50,marginBottom:8}}>👤</div>
       <div style={{fontSize:22,fontWeight:800,color:S.text,marginBottom:4}}>{name}</div>
       <div style={{fontSize:13,color:S.muted,marginBottom:24}}>أدخل الرقم السري</div>
@@ -339,7 +354,7 @@ function PinScreen({name,onSuccess,onBack,pins,night}){
         {["1","2","3","4","5","6","7","8","9","","0","del"].map((k,i)=>(
           k===""?<div key={i}/>:
           <button key={i} className="btn" onClick={()=>handleKey(k)}
-            style={{background:k==="del"?S.bg:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:"18px 0",fontSize:k==="del"?18:22,fontWeight:700,color:k==="del"?S.muted:S.text,cursor:"pointer",fontFamily:"Tajawal"}}>
+            style={{background:k==="del"?S.bg:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:"18px 0",fontSize:k==="del"?18:22,fontWeight:700,color:k==="del"?S.muted:S.text,cursor:"pointer",fontFamily:"Thmanyah Extended"}}>
             {k==="del"?"⌫":k}
           </button>
         ))}
@@ -352,7 +367,7 @@ function PinScreen({name,onSuccess,onBack,pins,night}){
 function SelectUser({onSelect,night}){
   const S=getTheme(night);
   return(
-    <div style={{minHeight:"100vh",background:S.bg,fontFamily:"'Tajawal',sans-serif"}} className="slide-up" dir="rtl">
+    <div style={{minHeight:"100vh",background:S.bg,fontFamily:"'Thmanyah Extended',sans-serif"}} className="slide-up" dir="rtl">
       <div style={{background:S.header,padding:"40px 20px 30px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
         <img src="/barr-logo-mark.png" alt="شعار بار" style={{width:180,height:120,objectFit:"contain"}}/>
         <div style={{fontSize:12,color:night?"rgba(255,255,255,0.7)":S.muted,marginTop:6}}>اختر اسمك للدخول</div>
@@ -360,7 +375,7 @@ function SelectUser({onSelect,night}){
       <div style={{padding:16}}>
         {FAMILY_MEMBERS.map(name=>(
           <button key={name} className="btn" onClick={()=>onSelect(name)}
-            style={{width:"100%",background:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:16,marginBottom:10,display:"flex",alignItems:"center",gap:12,cursor:"pointer",color:S.text,fontFamily:"Tajawal"}}>
+            style={{width:"100%",background:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:16,marginBottom:10,display:"flex",alignItems:"center",gap:12,cursor:"pointer",color:S.text,fontFamily:"Thmanyah Extended"}}>
             <span style={{fontSize:22,width:40,height:40,background:S.bg,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center"}}>👤</span>
             <span style={{flex:1,textAlign:"right"}}>
               <span style={{display:"block",fontSize:16,fontWeight:700}}>{name}</span>
@@ -405,7 +420,7 @@ function PinSetup({pins,onSave,night}){
             </div>
           </div>
           <button className="btn" onClick={()=>{setEditing(name);setNewPin("");}}
-            style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}}>
+            style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}}>
             {pins[name]?"تغيير":"تعيين"}
           </button>
         </div>
@@ -423,16 +438,16 @@ function PinSetup({pins,onSave,night}){
               {["1","2","3","4","5","6","7","8","9","","0","del"].map((k,i)=>(
                 k===""?<div key={i}/>:
                 <button key={i} className="btn" onClick={()=>handleDigit(k)}
-                  style={{background:k==="del"?S.bg:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:"16px 0",fontSize:k==="del"?16:20,fontWeight:700,color:k==="del"?S.muted:S.text,cursor:"pointer",fontFamily:"Tajawal"}}>
+                  style={{background:k==="del"?S.bg:S.card,border:`1px solid ${S.border}`,borderRadius:16,padding:"16px 0",fontSize:k==="del"?16:20,fontWeight:700,color:k==="del"?S.muted:S.text,cursor:"pointer",fontFamily:"Thmanyah Extended"}}>
                   {k==="del"?"⌫":k}
                 </button>
               ))}
             </div>
             <div style={{display:"flex",gap:10,marginTop:16}}>
               <button className="btn" onClick={savePin} disabled={newPin.length!==4}
-                style={{flex:1,background:newPin.length===4?"#0ea5e9":"#334155",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}}>حفظ</button>
+                style={{flex:1,background:newPin.length===4?"#0ea5e9":"#334155",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}}>حفظ</button>
               <button onClick={()=>{setEditing(null);setNewPin("");}}
-                style={{flex:1,background:"#334155",color:S.muted,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"Tajawal",cursor:"pointer"}}>إلغاء</button>
+                style={{flex:1,background:"#334155",color:S.muted,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"Thmanyah Extended",cursor:"pointer"}}>إلغاء</button>
             </div>
           </div>
         </div>
@@ -490,7 +505,7 @@ function CareContinuity({tasks,onUpdate,night}){
         const c=normalizeContinuity(task.continuity);
         return(
           <button key={task.id} className="card" onClick={()=>{setSelectedId(task.id);setView("details");}}
-            style={{width:"100%",textAlign:"right",background:taskResult.status==="FAIL"?danger.bg:S.card,border:`1px solid ${taskResult.status==="FAIL"?danger.border:S.border}`,borderRadius:18,padding:15,marginBottom:10,color:S.text,fontFamily:"Tajawal",cursor:"pointer"}}>
+            style={{width:"100%",textAlign:"right",background:taskResult.status==="FAIL"?danger.bg:S.card,border:`1px solid ${taskResult.status==="FAIL"?danger.border:S.border}`,borderRadius:18,padding:15,marginBottom:10,color:S.text,fontFamily:"Thmanyah Extended",cursor:"pointer"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <div style={{fontSize:24}}>{task.icon||"🧩"}</div>
               <div style={{flex:1}}>
@@ -510,7 +525,7 @@ function CareContinuity({tasks,onUpdate,night}){
   const c=normalizeContinuity(selected.continuity);
   return(
     <div className="slide-up">
-      <button onClick={()=>setView("overview")} style={{background:"none",border:"none",color:night?"#38bdf8":"#3978b9",fontFamily:"Tajawal",fontWeight:700,cursor:"pointer",marginBottom:12}}>→ لوحة الاستمرارية</button>
+      <button onClick={()=>setView("overview")} style={{background:"none",border:"none",color:night?"#38bdf8":"#3978b9",fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer",marginBottom:12}}>→ لوحة الاستمرارية</button>
       <div style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:18,padding:18,marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
           <div>
@@ -572,11 +587,16 @@ export default function FatherCare(){
   const [logs,setLogs]=useState({});
   const [notes,setNotes]=useState([]);
   const [vitals,setVitals]=useState({});
+  const [healthCard,setHealthCard]=useState(()=>normalizeHealthCard(DEFAULT_HEALTH_CARD));
+  const [emergencyContact,setEmergencyContact]=useState(()=>normalizeEmergencyContact(DEFAULT_EMERGENCY_CONTACT));
   const [loading,setLoading]=useState(true);
   const [showDoneModal,setShowDoneModal]=useState(null);
   const [showAddModal,setShowAddModal]=useState(false);
   const [showNotesModal,setShowNotesModal]=useState(false);
   const [showVitalsModal,setShowVitalsModal]=useState(false);
+  const [showHealthCardModal,setShowHealthCardModal]=useState(false);
+  const [showEmergencyContactModal,setShowEmergencyContactModal]=useState(false);
+  const [pendingEmergencyCall,setPendingEmergencyCall]=useState(null);
   const [showHistoryModal,setShowHistoryModal]=useState(false);
   const [historyDate,setHistoryDate]=useState("");
   const [historyLogs,setHistoryLogs]=useState(null);
@@ -586,6 +606,8 @@ export default function FatherCare(){
   const [addForm,setAddForm]=useState(emptyAddForm);
   const [noteText,setNoteText]=useState("");
   const [vitalForm,setVitalForm]=useState({bp_sys:"",bp_dia:"",sugar:"",period:"صباح"});
+  const [healthCardDraft,setHealthCardDraft]=useState(()=>normalizeHealthCard(DEFAULT_HEALTH_CARD));
+  const [emergencyContactDraft,setEmergencyContactDraft]=useState(()=>normalizeEmergencyContact(DEFAULT_EMERGENCY_CONTACT));
   const [savingId,setSavingId]=useState(null);
   const [notification,setNotification]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
@@ -619,8 +641,8 @@ export default function FatherCare(){
 
   const loadData=async()=>{
     try{
-      const [sched,logs_,notes_,pins_,vitals_]=await Promise.all([
-        fbGet("schedule"),fbGet(`logs_${today}`),fbGet(`notes_${today}`),fbGet("pins"),fbGet(`vitals_${today}`)
+      const [sched,logs_,notes_,pins_,vitals_,healthCard_,emergencyContact_]=await Promise.all([
+        fbGet("schedule"),fbGet(`logs_${today}`),fbGet(`notes_${today}`),fbGet("pins"),fbGet(`vitals_${today}`),fbGet("health_card"),fbGet("emergency_contact")
       ]);
       if(sched)setSchedule(ensureDemoTask(JSON.parse(sched)));
       else setSchedule(current=>ensureDemoTask(current));
@@ -628,6 +650,8 @@ export default function FatherCare(){
       if(notes_)setNotes(migrateNotes(JSON.parse(notes_)));
       if(pins_)setPins(migratePins(JSON.parse(pins_)));
       if(vitals_)setVitals(migrateVitals(JSON.parse(vitals_)));
+      if(healthCard_)setHealthCard(normalizeHealthCard(JSON.parse(healthCard_)));
+      if(emergencyContact_)setEmergencyContact(normalizeEmergencyContact(JSON.parse(emergencyContact_)));
     }catch(e){}
     setLoading(false);
   };
@@ -638,7 +662,9 @@ export default function FatherCare(){
     const u1=onSnapshot(doc(db,"barr",`logs_${today}`),(s)=>{if(s.exists())setLogs(migrateLogs(JSON.parse(s.data().value)));},ignoreUnavailable);
     const u2=onSnapshot(doc(db,"barr",`notes_${today}`),(s)=>{if(s.exists())setNotes(migrateNotes(JSON.parse(s.data().value)));},ignoreUnavailable);
     const u3=onSnapshot(doc(db,"barr",`vitals_${today}`),(s)=>{if(s.exists())setVitals(migrateVitals(JSON.parse(s.data().value)));},ignoreUnavailable);
-    return()=>{u1();u2();u3();};
+    const u4=onSnapshot(doc(db,"barr","health_card"),(s)=>{if(s.exists())setHealthCard(normalizeHealthCard(JSON.parse(s.data().value)));},ignoreUnavailable);
+    const u5=onSnapshot(doc(db,"barr","emergency_contact"),(s)=>{if(s.exists())setEmergencyContact(normalizeEmergencyContact(JSON.parse(s.data().value)));},ignoreUnavailable);
+    return()=>{u1();u2();u3();u4();u5();};
   },[loading]);
 
   // Late medication check
@@ -728,6 +754,51 @@ export default function FatherCare(){
     setShowVitalsModal(false);showNotif("💉 تم حفظ القياسات");
   };
 
+  const openHealthCardEditor=()=>{
+    setHealthCardDraft(normalizeHealthCard(healthCard));
+    setShowHealthCardModal(true);
+  };
+
+  const saveHealthCard=async()=>{
+    const next=normalizeHealthCard({...healthCardDraft,fullName:healthCardDraft.fullName||"دعث",updatedBy:activeUser,updatedAt:getTime()});
+    const saved=await fbSet("health_card",JSON.stringify(next));
+    if(!saved){showNotif("❌ تعذر حفظ البطاقة، حاول مرة أخرى");return;}
+    setHealthCard(next);
+    setShowHealthCardModal(false);
+    showNotif("✅ تم حفظ البطاقة الصحية");
+  };
+
+  const openEmergencyContactEditor=()=>{
+    setEmergencyContactDraft(normalizeEmergencyContact(emergencyContact));
+    setShowEmergencyContactModal(true);
+  };
+
+  const saveEmergencyContact=async()=>{
+    const next=normalizeEmergencyContact({...emergencyContactDraft,updatedBy:activeUser,updatedAt:getTime()});
+    if(!next.name||!createDialUri(next.phone)){
+      showNotif("⚠️ أدخل اسمًا ورقم اتصال صحيحًا");
+      return;
+    }
+    const saved=await fbSet("emergency_contact",JSON.stringify(next));
+    if(!saved){showNotif("❌ تعذر حفظ الرقم، حاول مرة أخرى");return;}
+    setEmergencyContact(next);
+    setShowEmergencyContactModal(false);
+    showNotif("✅ تم حفظ جهة اتصال الطوارئ");
+  };
+
+  const requestEmergencyCall=(contact)=>{
+    const uri=createDialUri(contact.number);
+    if(!uri){showNotif("⚠️ رقم الاتصال غير صالح");return;}
+    setPendingEmergencyCall({...contact,uri});
+  };
+
+  const confirmEmergencyCall=()=>{
+    if(!pendingEmergencyCall?.uri)return;
+    const uri=pendingEmergencyCall.uri;
+    setPendingEmergencyCall(null);
+    window.location.href=uri;
+  };
+
   // Load history for specific date
   const loadHistoryDate=async(date)=>{
     if(!date)return;
@@ -784,12 +855,12 @@ export default function FatherCare(){
     return d.toISOString().split("T")[0];
   });
 
-  if(loading)return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:S.bg,fontFamily:"Tajawal",color:S.muted,gap:12}}><div style={{fontSize:40}}>⏳</div><p>جاري التحميل...</p></div>);
+  if(loading)return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:S.bg,fontFamily:"Thmanyah Extended",color:S.muted,gap:12}}><div style={{fontSize:40}}>⏳</div><p>جاري التحميل...</p></div>);
   if(screen==="select")return(<div style={{background:S.bg}}><style>{getCSS(night)}</style><SelectUser onSelect={handleSelectUser} night={night}/>{notification&&<div style={NS.notif} className="slide-up">{notification}</div>}</div>);
   if(screen==="pin")return(<div style={{background:S.bg}}><style>{getCSS(night)}</style><PinScreen name={activeUser} pins={pins} onSuccess={handlePinSuccess} onBack={()=>{setScreen("select");setActiveUser(null);}} night={night}/></div>);
 
   return(
-    <div style={{fontFamily:"'Tajawal',sans-serif",background:S.bg,minHeight:"100vh",color:S.text,maxWidth:480,margin:"0 auto",position:"relative"}} dir="rtl">
+    <div style={{fontFamily:"'Thmanyah Extended',sans-serif",background:S.bg,minHeight:"100vh",color:S.text,maxWidth:480,margin:"0 auto",position:"relative"}} dir="rtl">
       <style>{getCSS(night)}</style>
 
       {/* Header */}
@@ -822,25 +893,38 @@ export default function FatherCare(){
           <div style={{display:"flex",alignItems:"center",gap:6,background:night?"rgba(56,189,248,.14)":"#e8f3ff",border:"1px solid #cfe4f7",borderRadius:20,padding:"5px 12px",fontSize:12,color:night?"#7dd3fc":"#275d91"}}>
             <span>👤</span><span>{activeUser}</span><span style={{fontSize:9,color:"#2f9d68"}}>●</span>
           </div>
-          <button onClick={logout} style={{marginRight:"auto",background:"none",border:`1px solid ${S.border}`,borderRadius:10,padding:"4px 11px",fontSize:11,color:S.muted,cursor:"pointer",fontFamily:"Tajawal"}}>خروج</button>
+          <button onClick={logout} style={{marginRight:"auto",background:"none",border:`1px solid ${S.border}`,borderRadius:10,padding:"4px 11px",fontSize:11,color:S.muted,cursor:"pointer",fontFamily:"Thmanyah Extended"}}>خروج</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,display:"flex",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"7px 4px 9px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
-        {[["today","اليوم"],["continuity","الاستمرارية"],["vitals","القياسات"],["history","السجل"],["notes","ملاحظات"],["schedule","الجدول"]].map(([k,l])=>(
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",zIndex:120,width:"100%",maxWidth:480,height:78,display:"grid",gridTemplateColumns:"repeat(5,1fr)",alignItems:"end",background:S.tabBg,borderTop:`1px solid ${S.tabBorder}`,padding:"7px 4px 8px",boxShadow:"0 -10px 30px rgba(18,49,90,.08)"}}>
+        {[["today","اليوم"],["vitals","القياسات"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)}
-            style={{flex:1,padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Tajawal",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            style={{padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+            <NavIcon name={k} active={tab===k}/><span>{l}</span>
+          </button>
+        ))}
+        <button onClick={()=>setTab("continuity")} aria-label="الاستمرارية"
+          style={{position:"relative",top:-15,padding:0,background:"none",border:"none",color:tab==="continuity"?"#176fa8":S.text,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:900,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+          <span style={{width:64,height:64,borderRadius:22,background:night?"linear-gradient(145deg,#f8fcff,#dceeff)":"linear-gradient(145deg,#fff,#e3f2ff)",border:`3px solid ${tab==="continuity"?"#54a7e1":S.tabBg}`,boxShadow:tab==="continuity"?"0 9px 24px rgba(45,129,190,.35)":"0 8px 22px rgba(18,76,124,.22)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:56,height:42,objectFit:"contain"}}/>
+          </span>
+          <span>الاستمرارية</span>
+        </button>
+        {[["notes","ملاحظات"],["schedule","الجدول"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)}
+            style={{padding:"3px 1px",background:"none",border:"none",color:tab===k?"#275d91":S.muted,fontSize:10,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:tab===k?800:500,whiteSpace:"nowrap",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
             <NavIcon name={k} active={tab===k}/><span>{l}</span>
           </button>
         ))}
       </div>
 
-      <div style={{padding:"16px 16px 94px",overflowY:"auto",maxHeight:"calc(100vh - 205px)"}}>
+      <div style={{padding:"16px 16px 116px",overflowY:"auto",maxHeight:"calc(100vh - 205px)"}}>
 
         {/* TODAY */}
         {tab==="today"&&<div className="slide-up">
-          <button className="card" onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:16,marginBottom:12,display:"flex",alignItems:"center",gap:14,textAlign:"right",fontFamily:"Tajawal",cursor:"pointer",color:S.text}}>
+          <button className="card" onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#f7fbff,#e8f3ff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:22,padding:16,marginBottom:12,display:"flex",alignItems:"center",gap:14,textAlign:"right",fontFamily:"Thmanyah Extended",cursor:"pointer",color:S.text}}>
             <div style={{width:72,height:62,borderRadius:19,flexShrink:0,background:night?"rgba(255,255,255,.92)":"#f8fcff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 18px rgba(79,142,213,.16)"}}><img src="/barr-logo-mark.png" alt="" aria-hidden="true" style={{width:68,height:48,objectFit:"contain"}}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:18,fontWeight:900,color:night?"#fff":S.text}}>استمرارية الرعاية</div>
@@ -850,10 +934,21 @@ export default function FatherCare(){
           </button>
 
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginBottom:12}}>
-            {[["today","▦","المهام"],["schedule","💊","الأدوية"],["vitals","◉","القياسات"],["history","▤","السجل"]].map(([key,icon,label])=><button key={key} onClick={()=>setTab(key)} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:15,padding:"11px 2px",fontFamily:"Tajawal",color:S.text,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><span style={{fontSize:19}}>{icon}</span><span style={{fontSize:10,fontWeight:700}}>{label}</span></button>)}
+            {[["today","▦","المهام"],["schedule","💊","الأدوية"],["vitals","◉","القياسات"],["history","▤","السجل"]].map(([key,icon,label])=><button key={key} onClick={()=>setTab(key)} style={{background:S.card,border:`1px solid ${S.border}`,borderRadius:15,padding:"11px 2px",fontFamily:"Thmanyah Extended",color:S.text,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}><span style={{fontSize:19}}>{icon}</span><span style={{fontSize:10,fontWeight:700}}>{label}</span></button>)}
           </div>
 
-          {continuityRiskCount>0&&<button onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"#450a0a":"#fff0ee",border:`1px solid ${night?"#ef4444":"#f5c7c2"}`,borderRadius:18,padding:"14px 16px",marginBottom:18,display:"flex",alignItems:"center",gap:12,textAlign:"right",fontFamily:"Tajawal",cursor:"pointer"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <button className="card" onClick={()=>setTab("health-card")} style={{background:night?"linear-gradient(135deg,#172554,#1e3a8a)":"linear-gradient(135deg,#edf6ff,#f9fcff)",border:`1px solid ${night?"#3b82f6":"#cfe4f7"}`,borderRadius:17,padding:"13px 12px",display:"flex",alignItems:"center",gap:9,textAlign:"right",color:S.text,cursor:"pointer"}}>
+              <div style={{width:40,height:40,borderRadius:13,background:night?"rgba(255,255,255,.12)":"#dceeff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19}}>🪪</div>
+              <div><div style={{fontSize:13,fontWeight:900}}>البطاقة الصحية</div><div style={{fontSize:9,color:S.muted,marginTop:2}}>معلومات دعث الطبية</div></div>
+            </button>
+            <button className="card" onClick={()=>setTab("emergency")} style={{background:night?"linear-gradient(135deg,#450a0a,#7f1d1d)":"linear-gradient(135deg,#fff0ee,#fff8f7)",border:`1px solid ${night?"#991b1b":"#f5c7c2"}`,borderRadius:17,padding:"13px 12px",display:"flex",alignItems:"center",gap:9,textAlign:"right",color:night?"#fecaca":"#8f3029",cursor:"pointer"}}>
+              <div style={{width:40,height:40,borderRadius:13,background:night?"rgba(255,255,255,.1)":"#fbd8d4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>☎</div>
+              <div><div style={{fontSize:13,fontWeight:900}}>الطوارئ</div><div style={{fontSize:9,opacity:.72,marginTop:2}}>اتصال سريع وآمن</div></div>
+            </button>
+          </div>
+
+          {continuityRiskCount>0&&<button onClick={()=>setTab("continuity")} style={{width:"100%",background:night?"#450a0a":"#fff0ee",border:`1px solid ${night?"#ef4444":"#f5c7c2"}`,borderRadius:18,padding:"14px 16px",marginBottom:18,display:"flex",alignItems:"center",gap:12,textAlign:"right",fontFamily:"Thmanyah Extended",cursor:"pointer"}}>
             <div style={{width:42,height:42,borderRadius:14,background:night?"#7f1d1d":"#fbd8d4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:21}}>!</div>
             <div style={{flex:1}}><div style={{fontSize:16,fontWeight:900,color:night?"#fca5a5":"#a33b32"}}>تحتاج انتباهًا</div><div style={{fontSize:11,color:night?"#fecaca":"#b85a51",marginTop:2}}>{formatArabicNumber(continuityRiskCount)} مهام حرجة بها نقاط ضعف</div></div>
             <span style={{color:night?"#fca5a5":"#a33b32",fontSize:18}}>‹</span>
@@ -894,8 +989,8 @@ export default function FatherCare(){
                       </div>
                       <div style={{flexShrink:0,marginRight:6}}>
                         {!done
-                          ?<button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowDoneModal(item)} disabled={savingId===item.id}>{savingId===item.id?"⏳":"تم"}</button>
-                          :<button className="btn" style={{background:S.card2,color:S.muted,border:`1px solid ${S.border}`,borderRadius:10,padding:"7px 10px",fontSize:12,fontFamily:"Tajawal",cursor:"pointer"}} onClick={()=>undoMark(item.id)}>تراجع</button>
+                          ?<button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowDoneModal(item)} disabled={savingId===item.id}>{savingId===item.id?"⏳":"تم"}</button>
+                          :<button className="btn" style={{background:S.card2,color:S.muted,border:`1px solid ${S.border}`,borderRadius:10,padding:"7px 10px",fontSize:12,fontFamily:"Thmanyah Extended",cursor:"pointer"}} onClick={()=>undoMark(item.id)}>تراجع</button>
                         }
                       </div>
                     </div>
@@ -916,11 +1011,17 @@ export default function FatherCare(){
         {/* CARE CONTINUITY */}
         {tab==="continuity"&&<CareContinuity tasks={schedule} onUpdate={updateContinuityTask} night={night}/>}
 
+        {/* HEALTH CARD */}
+        {tab==="health-card"&&<HealthCardView card={healthCard} isAdmin={activeUser===ADMIN} onEdit={openHealthCardEditor} onBack={()=>setTab("today")} S={S} night={night}/>}
+
+        {/* EMERGENCY */}
+        {tab==="emergency"&&<EmergencyView familyContact={emergencyContact} isAdmin={activeUser===ADMIN} onEditContact={openEmergencyContactEditor} onCall={requestEmergencyCall} onBack={()=>setTab("today")} S={S} night={night}/>}
+
         {/* VITALS */}
         {tab==="vitals"&&<div className="slide-up">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <div style={{fontSize:12,fontWeight:700,color:S.muted,letterSpacing:0.5}}>قياسات اليوم</div>
-            <button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowVitalsModal(true)}>+ تسجيل</button>
+            <button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowVitalsModal(true)}>+ تسجيل</button>
           </div>
           {Object.keys(vitals).length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:S.muted,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}><div style={{fontSize:40}}>💉</div><p>لا توجد قياسات بعد</p></div>}
           {Object.entries(vitals).sort(([,a],[,b])=>(a.at||"").localeCompare(b.at||"")).map(([key,v])=>(
@@ -976,14 +1077,14 @@ export default function FatherCare(){
           <div style={{fontSize:12,fontWeight:700,color:S.muted,marginBottom:10,letterSpacing:0.5}}>🔍 سجل يوم سابق</div>
           <div style={{display:"flex",gap:8,marginBottom:16}}>
             <input type="date" value={historyDate} onChange={e=>setHistoryDate(e.target.value)} max={today}
-              style={{flex:1,background:S.card,border:`1px solid ${S.border}`,borderRadius:10,padding:"8px 12px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}}/>
+              style={{flex:1,background:S.card,border:`1px solid ${S.border}`,borderRadius:10,padding:"8px 12px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none"}}/>
             <button className="btn" onClick={()=>loadHistoryDate(historyDate)} disabled={!historyDate}
-              style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}}>عرض</button>
+              style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:13,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}}>عرض</button>
           </div>
 
           {/* Weekly PDF */}
           <button className="btn" onClick={downloadWeeklyPDF} disabled={pdfLoading}
-              style={{width:"100%",background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              style={{width:"100%",background:"linear-gradient(135deg,#7c3aed,#6d28d9)",color:"#fff",border:"none",borderRadius:14,padding:"12px 16px",fontSize:14,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
               {pdfLoading?"⏳ جاري الإنشاء...":"📄 تحميل التقرير الأسبوعي PDF"}
             </button>
         </div>}
@@ -992,7 +1093,7 @@ export default function FatherCare(){
         {tab==="notes"&&<div className="slide-up">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <div style={{fontSize:12,fontWeight:700,color:S.muted,letterSpacing:0.5}}>ملاحظات اليوم</div>
-            <button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowNotesModal(true)}>+ إضافة</button>
+            <button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowNotesModal(true)}>+ إضافة</button>
           </div>
           {notes.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:S.muted,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}><div style={{fontSize:40}}>📝</div><p>لا توجد ملاحظات بعد</p></div>}
           {notes.map(note=>(
@@ -1012,7 +1113,7 @@ export default function FatherCare(){
         {tab==="schedule"&&<div className="slide-up">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{fontSize:12,fontWeight:700,color:S.muted,letterSpacing:0.5}}>إدارة الجدول</div>
-            {activeUser===ADMIN&&<button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Tajawal",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowAddModal(true)}>+ إضافة</button>}
+            {activeUser===ADMIN&&<button className="btn" style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:13,fontFamily:"Thmanyah Extended",fontWeight:700,cursor:"pointer"}} onClick={()=>setShowAddModal(true)}>+ إضافة</button>}
           </div>
           {meals.map(meal=>(
             <div key={meal} style={{marginBottom:20}}>
@@ -1074,7 +1175,7 @@ export default function FatherCare(){
                 ))}
               </div>
             )}
-            <button onClick={()=>setShowHistoryModal(false)} style={{width:"100%",background:"#334155",color:S.muted,border:"none",borderRadius:12,padding:"12px 0",fontSize:14,fontFamily:"Tajawal",cursor:"pointer",marginTop:12}}>إغلاق</button>
+            <button onClick={()=>setShowHistoryModal(false)} style={{width:"100%",background:"#334155",color:S.muted,border:"none",borderRadius:12,padding:"12px 0",fontSize:14,fontFamily:"Thmanyah Extended",cursor:"pointer",marginTop:12}}>إغلاق</button>
           </div>
         </div>
       )}
@@ -1105,7 +1206,7 @@ export default function FatherCare(){
               <div style={{display:"flex",gap:8}}>
                 {["medication","meal"].map(t=>(
                   <button key={t} onClick={()=>setAddForm({...addForm,type:t,icon:t==="medication"?"💊":"🍽️"})}
-                    style={{flex:1,background:addForm.type===t?"#1e3a5f":S.bg,border:`1px solid ${addForm.type===t?"#0ea5e9":S.border}`,borderRadius:10,padding:"8px 0",color:addForm.type===t?"#38bdf8":S.muted,fontSize:13,fontFamily:"Tajawal",cursor:"pointer",fontWeight:addForm.type===t?700:400}}>
+                    style={{flex:1,background:addForm.type===t?"#1e3a5f":S.bg,border:`1px solid ${addForm.type===t?"#0ea5e9":S.border}`,borderRadius:10,padding:"8px 0",color:addForm.type===t?"#38bdf8":S.muted,fontSize:13,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:addForm.type===t?700:400}}>
                     {t==="medication"?"💊 دواء":"🍽️ وجبة"}
                   </button>
                 ))}
@@ -1116,7 +1217,7 @@ export default function FatherCare(){
               <div style={{display:"flex",gap:6}}>
                 {meals.map(m=>(
                   <button key={m} onClick={()=>setAddForm({...addForm,meal:m})}
-                    style={{flex:1,background:addForm.meal===m?"#1e3a5f":S.bg,border:`1px solid ${addForm.meal===m?"#0ea5e9":S.border}`,borderRadius:10,padding:"7px 0",color:addForm.meal===m?"#38bdf8":S.muted,fontSize:12,fontFamily:"Tajawal",cursor:"pointer"}}>
+                    style={{flex:1,background:addForm.meal===m?"#1e3a5f":S.bg,border:`1px solid ${addForm.meal===m?"#0ea5e9":S.border}`,borderRadius:10,padding:"7px 0",color:addForm.meal===m?"#38bdf8":S.muted,fontSize:12,fontFamily:"Thmanyah Extended",cursor:"pointer"}}>
                     {m}
                   </button>
                 ))}
@@ -1125,12 +1226,12 @@ export default function FatherCare(){
             {[["name",addForm.type==="medication"?"اسم الدواء":"اسم الوجبة","مثال: دواء الضغط"],["dose",addForm.type==="medication"?"الجرعة":"الوصف","مثال: حبة واحدة"]].map(([f,l,p])=>(
               <div key={f} style={{marginBottom:12}}>
                 <label style={{display:"block",fontSize:12,color:S.muted,marginBottom:6,fontWeight:600}}>{l}</label>
-                <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}} dir="rtl" placeholder={p} value={addForm[f]} onChange={e=>setAddForm({...addForm,[f]:e.target.value})}/>
+                <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none"}} dir="rtl" placeholder={p} value={addForm[f]} onChange={e=>setAddForm({...addForm,[f]:e.target.value})}/>
               </div>
             ))}
             <div style={{marginBottom:14}}>
               <label style={{display:"block",fontSize:12,color:S.muted,marginBottom:6,fontWeight:600}}>الوقت</label>
-              <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none"}} type="time" value={addForm.time} onChange={e=>setAddForm({...addForm,time:e.target.value})}/>
+              <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none"}} type="time" value={addForm.time} onChange={e=>setAddForm({...addForm,time:e.target.value})}/>
             </div>
             <div style={{height:1,background:S.border,margin:"16px 0"}}/>
             <div style={{fontSize:14,fontWeight:800,color:S.text,marginBottom:8}}>🛡️ خطة استمرارية الرعاية</div>
@@ -1138,14 +1239,14 @@ export default function FatherCare(){
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
               <div>
                 <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>المسؤول الأساسي</label>
-                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Tajawal",outline:"none"}} value={addForm.primary} onChange={e=>setAddForm({...addForm,primary:e.target.value,backup:addForm.backup===e.target.value?"":addForm.backup})}>
+                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Thmanyah Extended",outline:"none"}} value={addForm.primary} onChange={e=>setAddForm({...addForm,primary:e.target.value,backup:addForm.backup===e.target.value?"":addForm.backup})}>
                   <option value="">اختر</option>
                   {FAMILY_MEMBERS.map(name=><option key={name} value={name}>{name} • {FAMILY_RELATIONSHIPS[name]}</option>)}
                 </select>
               </div>
               <div>
                 <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>البديل</label>
-                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Tajawal",outline:"none"}} value={addForm.backup} onChange={e=>setAddForm({...addForm,backup:e.target.value})}>
+                <select style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"9px 8px",color:S.text,fontSize:12,fontFamily:"Thmanyah Extended",outline:"none"}} value={addForm.backup} onChange={e=>setAddForm({...addForm,backup:e.target.value})}>
                   <option value="">اختر</option>
                   {FAMILY_MEMBERS.filter(name=>name!==addForm.primary).map(name=><option key={name} value={name}>{name} • {FAMILY_RELATIONSHIPS[name]}</option>)}
                 </select>
@@ -1154,7 +1255,7 @@ export default function FatherCare(){
             <div style={{marginBottom:12}}>
               <label style={{display:"block",fontSize:11,color:S.muted,marginBottom:5,fontWeight:600}}>مستوى الأهمية</label>
               <div style={{display:"flex",gap:8}}>
-                {[["normal","عادية"],["critical","حرجة"]].map(([value,label])=><button key={value} type="button" onClick={()=>setAddForm({...addForm,importance:value})} style={{flex:1,background:addForm.importance===value?(value==="critical"?"#7f1d1d":"#1e3a5f"):S.bg,border:`1px solid ${addForm.importance===value?(value==="critical"?"#ef4444":"#0ea5e9"):S.border}`,borderRadius:9,padding:8,color:addForm.importance===value?"#fff":S.muted,fontFamily:"Tajawal",cursor:"pointer"}}>{label}</button>)}
+                {[["normal","عادية"],["critical","حرجة"]].map(([value,label])=><button key={value} type="button" onClick={()=>setAddForm({...addForm,importance:value})} style={{flex:1,background:addForm.importance===value?(value==="critical"?"#7f1d1d":"#1e3a5f"):S.bg,border:`1px solid ${addForm.importance===value?(value==="critical"?"#ef4444":"#0ea5e9"):S.border}`,borderRadius:9,padding:8,color:addForm.importance===value?"#fff":S.muted,fontFamily:"Thmanyah Extended",cursor:"pointer"}}>{label}</button>)}
               </div>
             </div>
             <div style={{fontSize:11,color:S.muted,marginBottom:6,fontWeight:700}}>متطلبات جاهزية البديل</div>
@@ -1177,7 +1278,7 @@ export default function FatherCare(){
         <div style={NS.overlay} className="fade-in" onClick={()=>setShowNotesModal(false)}>
           <div style={{...NS.modal,background:S.card,border:`1px solid ${S.border}`}} className="slide-up" onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:800,textAlign:"center",marginBottom:16,color:S.text}}>📝 إضافة ملاحظة</div>
-            <textarea style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none",height:120,resize:"none",lineHeight:1.7,marginBottom:14}} dir="rtl" placeholder="اكتب ملاحظتك هنا..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
+            <textarea style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none",height:120,resize:"none",lineHeight:1.7,marginBottom:14}} dir="rtl" placeholder="اكتب ملاحظتك هنا..." value={noteText} onChange={e=>setNoteText(e.target.value)}/>
             <div style={{display:"flex",gap:10}}>
               <button className="btn" style={NS.btnConfirm} onClick={addNote}>✅ حفظ</button>
               <button style={{...NS.btnCancel,background:S.card2,color:S.muted}} onClick={()=>setShowNotesModal(false)}>إلغاء</button>
@@ -1196,7 +1297,7 @@ export default function FatherCare(){
               <div style={{display:"flex",gap:8}}>
                 {["صباح","مساء"].map(p=>(
                   <button key={p} onClick={()=>setVitalForm({...vitalForm,period:p})}
-                    style={{flex:1,background:vitalForm.period===p?"#1e3a5f":S.bg,border:`1px solid ${vitalForm.period===p?"#0ea5e9":S.border}`,borderRadius:10,padding:"8px 0",color:vitalForm.period===p?"#38bdf8":S.muted,fontSize:14,fontFamily:"Tajawal",cursor:"pointer",fontWeight:vitalForm.period===p?700:400}}>
+                    style={{flex:1,background:vitalForm.period===p?"#1e3a5f":S.bg,border:`1px solid ${vitalForm.period===p?"#0ea5e9":S.border}`,borderRadius:10,padding:"8px 0",color:vitalForm.period===p?"#38bdf8":S.muted,fontSize:14,fontFamily:"Thmanyah Extended",cursor:"pointer",fontWeight:vitalForm.period===p?700:400}}>
                     {p==="صباح"?"🌅 صباح":"🌙 مساء"}
                   </button>
                 ))}
@@ -1205,14 +1306,14 @@ export default function FatherCare(){
             <div style={{marginBottom:12}}>
               <label style={{display:"block",fontSize:12,color:S.muted,marginBottom:6,fontWeight:600}}>الضغط (mmHg)</label>
               <div style={{display:"flex",gap:8}}>
-                <input style={{flex:1,background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 12px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none",textAlign:"center"}} placeholder="الانقباضي" type="number" value={vitalForm.bp_sys} onChange={e=>setVitalForm({...vitalForm,bp_sys:e.target.value})}/>
+                <input style={{flex:1,background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 12px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none",textAlign:"center"}} placeholder="الانقباضي" type="number" value={vitalForm.bp_sys} onChange={e=>setVitalForm({...vitalForm,bp_sys:e.target.value})}/>
                 <span style={{color:S.muted,display:"flex",alignItems:"center",fontWeight:700}}>/</span>
-                <input style={{flex:1,background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 12px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none",textAlign:"center"}} placeholder="الانبساطي" type="number" value={vitalForm.bp_dia} onChange={e=>setVitalForm({...vitalForm,bp_dia:e.target.value})}/>
+                <input style={{flex:1,background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 12px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none",textAlign:"center"}} placeholder="الانبساطي" type="number" value={vitalForm.bp_dia} onChange={e=>setVitalForm({...vitalForm,bp_dia:e.target.value})}/>
               </div>
             </div>
             <div style={{marginBottom:16}}>
               <label style={{display:"block",fontSize:12,color:S.muted,marginBottom:6,fontWeight:600}}>السكر (mg/dL)</label>
-              <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Tajawal",outline:"none",textAlign:"center"}} placeholder="مثال: 120" type="number" value={vitalForm.sugar} onChange={e=>setVitalForm({...vitalForm,sugar:e.target.value})}/>
+              <input style={{width:"100%",background:S.bg,border:`1px solid ${S.border}`,borderRadius:10,padding:"10px 14px",color:S.text,fontSize:14,fontFamily:"Thmanyah Extended",outline:"none",textAlign:"center"}} placeholder="مثال: 120" type="number" value={vitalForm.sugar} onChange={e=>setVitalForm({...vitalForm,sugar:e.target.value})}/>
             </div>
             <div style={{display:"flex",gap:10}}>
               <button className="btn" style={NS.btnConfirm} onClick={saveVitals}>✅ حفظ</button>
@@ -1222,6 +1323,16 @@ export default function FatherCare(){
         </div>
       )}
 
+      {showHealthCardModal&&(
+        <HealthCardModal draft={healthCardDraft} setDraft={setHealthCardDraft} onSave={saveHealthCard} onClose={()=>setShowHealthCardModal(false)} S={S}/>
+      )}
+
+      {showEmergencyContactModal&&(
+        <EmergencyContactModal draft={emergencyContactDraft} setDraft={setEmergencyContactDraft} onSave={saveEmergencyContact} onClose={()=>setShowEmergencyContactModal(false)} S={S}/>
+      )}
+
+      <EmergencyCallModal contact={pendingEmergencyCall} onConfirm={confirmEmergencyCall} onClose={()=>setPendingEmergencyCall(null)} S={S}/>
+
       {notification&&<div style={NS.notif} className="slide-up">{notification}</div>}
     </div>
   );
@@ -1230,7 +1341,7 @@ export default function FatherCare(){
 const NS={
   overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200},
   modal:{borderRadius:"20px 20px 0 0",padding:"24px 20px 36px",width:"100%",maxWidth:480,borderBottom:"none",maxHeight:"90vh",overflowY:"auto"},
-  btnConfirm:{flex:1,background:"#0ea5e9",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"'Tajawal',sans-serif",fontWeight:700,cursor:"pointer"},
-  btnCancel:{flex:1,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"'Tajawal',sans-serif",cursor:"pointer"},
+  btnConfirm:{flex:1,background:"#0ea5e9",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"'Thmanyah Extended',sans-serif",fontWeight:700,cursor:"pointer"},
+  btnCancel:{flex:1,border:"none",borderRadius:12,padding:"12px 0",fontSize:15,fontFamily:"'Thmanyah Extended',sans-serif",cursor:"pointer"},
   notif:{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:"#1e293b",border:"1px solid #334155",borderRadius:20,padding:"10px 24px",fontSize:14,fontWeight:600,color:"#f1f5f9",zIndex:300,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",whiteSpace:"nowrap"},
 };
